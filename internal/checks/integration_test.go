@@ -59,7 +59,7 @@ func TestRunnerWithMockedEndpoints(t *testing.T) {
 			t.Fatalf("unexpected fail finding: %+v", f)
 		}
 	}
-	for _, id := range []string{"execution.block_compare.match", "topology.light-1.safe_head_metrics", "interop.scope"} {
+	for _, id := range []string{"execution.block_compare.match", "execution.rpc_surface.match", "topology.light-1.safe_head_metrics", "interop.scope"} {
 		if !hasFinding(findings, id) {
 			t.Fatalf("missing finding %s; got ids %s", id, findingIDs(findings))
 		}
@@ -102,6 +102,25 @@ func newRPCServer(t *testing.T, version string, chainID, head uint64) *httptest.
 				"transactionsRoot": "0xtx" + n,
 				"receiptsRoot":     "0xreceipt" + n,
 			}
+		case "eth_getBlockByHash":
+			var params []any
+			if err := json.Unmarshal(req.Params, &params); err != nil {
+				t.Fatalf("decode params: %v", err)
+			}
+			hash, ok := params[0].(string)
+			if !ok {
+				t.Fatalf("block hash param = %#v", params[0])
+			}
+			result = map[string]any{
+				"number":           fmt.Sprintf("0x%x", head),
+				"hash":             hash,
+				"parentHash":       "0xparent_by_hash",
+				"stateRoot":        "0xstate_by_hash",
+				"transactionsRoot": "0xtx_by_hash",
+				"receiptsRoot":     "0xreceipt_by_hash",
+			}
+		case "eth_getBlockTransactionCountByNumber":
+			result = "0x2"
 		default:
 			result = nil
 		}

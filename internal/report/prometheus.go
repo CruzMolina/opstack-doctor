@@ -138,6 +138,25 @@ func renderDerivedMetrics(w io.Writer, findings []Finding, opts PrometheusOption
 		return err
 	}
 
+	if _, err := fmt.Fprintln(w, "# HELP opstack_doctor_execution_rpc_surface_match Whether sampled read-only execution RPC outputs matched. 1 means matched, 0 means mismatch or fetch failure observed."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE opstack_doctor_execution_rpc_surface_match gauge"); err != nil {
+		return err
+	}
+	if hasFinding(findings, "execution.rpc_surface.match") || hasFindingPrefix(findings, "execution.rpc_surface.") {
+		value := float64(0)
+		if hasFinding(findings, "execution.rpc_surface.match") && !hasFailFindingPrefix(findings, "execution.rpc_surface.") {
+			value = 1
+		}
+		if _, err := fmt.Fprintf(w, "opstack_doctor_execution_rpc_surface_match%s %s\n", renderLabels(chainLabels(opts)), formatPromFloat(value)); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+
 	if _, err := fmt.Fprintln(w, "# HELP opstack_doctor_topology_follower_lag_blocks Follower lag behind its configured source, derived from RPC head or safe-head metrics."); err != nil {
 		return err
 	}
@@ -195,9 +214,27 @@ func hasFinding(findings []Finding, id string) bool {
 	return false
 }
 
+func hasFindingPrefix(findings []Finding, prefix string) bool {
+	for _, f := range findings {
+		if strings.HasPrefix(f.ID, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func hasFailFinding(findings []Finding, id string) bool {
 	for _, f := range findings {
 		if f.ID == id && f.Severity == SeverityFail {
+			return true
+		}
+	}
+	return false
+}
+
+func hasFailFindingPrefix(findings []Finding, prefix string) bool {
+	for _, f := range findings {
+		if strings.HasPrefix(f.ID, prefix) && f.Severity == SeverityFail {
 			return true
 		}
 	}

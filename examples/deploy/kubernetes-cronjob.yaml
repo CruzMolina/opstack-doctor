@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opstack-doctor-config
+  namespace: monitoring
+data:
+  doctor.yaml: |
+    chain:
+      name: op-mainnet
+      chain_id: 10
+
+    execution:
+      reference_rpc: "http://op-geth.internal.example"
+      candidate_rpc: "http://op-reth.internal.example"
+      compare_blocks: 16
+      max_head_lag_blocks: 4
+
+    op_nodes:
+      - name: source-1
+        role: source
+        rpc: "http://source-1.internal.example"
+        metrics: "http://source-1.internal.example:7300/metrics"
+      - name: source-2
+        role: source
+        rpc: "http://source-2.internal.example"
+        metrics: "http://source-2.internal.example:7300/metrics"
+      - name: light-1
+        role: light
+        rpc: "http://light-1.internal.example"
+        metrics: "http://light-1.internal.example:7300/metrics"
+        follows: source-1
+
+    interop:
+      enabled: false
+      dependencies: []
+
+    thresholds:
+      max_safe_lag_blocks: 20
+      min_peer_count: 1
+      max_rpc_latency_seconds: 2.0
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: opstack-doctor-export
+  namespace: monitoring
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: opstack-doctor
+              # Placeholder: publish your own internal image that contains the release binary.
+              image: ghcr.io/OWNER/opstack-doctor:v0.1.0
+              imagePullPolicy: IfNotPresent
+              args:
+                - export
+                - metrics
+                - --config
+                - /config/doctor.yaml
+              volumeMounts:
+                - name: config
+                  mountPath: /config
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 250m
+                  memory: 128Mi
+          volumes:
+            - name: config
+              configMap:
+                name: opstack-doctor-config

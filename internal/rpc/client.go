@@ -138,6 +138,20 @@ func (c *Client) BlockByNumber(ctx context.Context, number uint64) (Block, error
 	return out, err
 }
 
+func (c *Client) BlockByHash(ctx context.Context, hash string) (Block, error) {
+	var out Block
+	err := c.Call(ctx, "eth_getBlockByHash", []any{hash, false}, &out)
+	return out, err
+}
+
+func (c *Client) BlockTransactionCountByNumber(ctx context.Context, number uint64) (uint64, error) {
+	var out string
+	if err := c.Call(ctx, "eth_getBlockTransactionCountByNumber", []any{Quantity(number)}, &out); err != nil {
+		return 0, err
+	}
+	return ParseQuantity(out)
+}
+
 func ParseQuantity(s string) (uint64, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {

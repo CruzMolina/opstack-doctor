@@ -142,10 +142,8 @@ func (r Runner) checkExecution(ctx context.Context, cfg config.Config) (map[stri
 	findings = append(findings, cand.findings...)
 
 	if ref.status.headOK && cand.status.headOK {
-		lag := uint64(0)
-		if ref.status.head > cand.status.head {
-			lag = ref.status.head - cand.status.head
-		}
+		commonHead := latestCommonHead(ref.status, cand.status)
+		lag := headLag(ref.status, cand.status)
 		evidence := map[string]string{
 			"reference_head": fmt.Sprintf("%d", ref.status.head),
 			"candidate_head": fmt.Sprintf("%d", cand.status.head),
@@ -156,9 +154,24 @@ func (r Runner) checkExecution(ctx context.Context, cfg config.Config) (map[stri
 		} else {
 			findings = append(findings, finding("execution.head_lag", "Execution candidate head is close to reference", report.SeverityOK, "execution", fmt.Sprintf("candidate lag is %d blocks", lag), "Continue comparing blocks and RPC behavior before migration cutover.", []string{DocOPGethDeprecation}, evidence))
 		}
-		findings = append(findings, r.compareExecutionBlocks(ctx, cfg, ref.status, cand.status)...)
+		findings = append(findings, r.compareExecutionBlocks(ctx, cfg, ref.status, cand.status, commonHead)...)
+		findings = append(findings, r.compareExecutionRPCSurface(ctx, ref.status, cand.status, commonHead)...)
 	}
 	return statuses, findings
+}
+
+func latestCommonHead(ref, cand executionEndpointStatus) uint64 {
+	if cand.head < ref.head {
+		return cand.head
+	}
+	return ref.head
+}
+
+func headLag(ref, cand executionEndpointStatus) uint64 {
+	if ref.head > cand.head {
+		return ref.head - cand.head
+	}
+	return 0
 }
 
 type endpointProbe struct {
@@ -237,13 +250,9 @@ func classifyClientFinding(name, target, version string) report.Finding {
 	}
 }
 
-func (r Runner) compareExecutionBlocks(ctx context.Context, cfg config.Config, ref, cand executionEndpointStatus) []report.Finding {
+func (r Runner) compareExecutionBlocks(ctx context.Context, cfg config.Config, ref, cand executionEndpointStatus, commonHead uint64) []report.Finding {
 	if !ref.headOK || !cand.headOK {
 		return nil
-	}
-	commonHead := ref.head
-	if cand.head < commonHead {
-		commonHead = cand.head
 	}
 	compareBlocks := cfg.Execution.CompareBlocks
 	if compareBlocks <= 0 {
@@ -300,6 +309,72 @@ func (r Runner) compareExecutionBlocks(ctx context.Context, cfg config.Config, r
 	}
 	if compared > 0 && !hasDivergence {
 		findings = append(findings, finding("execution.block_compare.match", "Execution block comparison matched", report.SeverityOK, "execution", fmt.Sprintf("%d latest common blocks matched", compared), "Continue running op-reth alongside the existing node and expand comparison depth for higher confidence before migration.", []string{DocOPGethDeprecation}, map[string]string{"compared_blocks": fmt.Sprintf("%d", compared), "common_head": fmt.Sprintf("%d", commonHead)}))
+	}
+	return findings
+}
+
+func (r Runner) compareExecutionRPCSurface(ctx context.Context, ref, cand executionEndpointStatus, commonHead uint64) []report.Finding {
+	refClient := rpc.NewClient(ref.rpcURL, r.Timeout)
+	candClient := rpc.NewClient(cand.rpcURL, r.Timeout)
+	var findings []report.Finding
+	compared := 0
+
+	refTxCount, err := refClient.BlockTransactionCountByNumber(ctx, commonHead)
+	if err != nil {
+		findings = append(findings, finding("execution.rpc_surface.fetch_reference", "Reference RPC surface check failed", report.SeverityFail, "execution.reference_rpc", err.Error(), "Ensure eth_getBlockTransactionCountByNumber is available on the reference endpoint.", []string{DocOPGethDeprecation}, map[string]string{"method": "eth_getBlockTransactionCountByNumber", "block_number": fmt.Sprintf("%d", commonHead)}))
+	} else {
+		candTxCount, err := candClient.BlockTransactionCountByNumber(ctx, commonHead)
+		if err != nil {
+			findings = append(findings, finding("execution.rpc_surface.fetch_candidate", "Candidate RPC surface check failed", report.SeverityFail, "execution.candidate_rpc", err.Error(), "Ensure eth_getBlockTransactionCountByNumber is available on the candidate endpoint.", []string{DocOPGethDeprecation}, map[string]string{"method": "eth_getBlockTransactionCountByNumber", "block_number": fmt.Sprintf("%d", commonHead)}))
+		} else {
+			compared++
+			if refTxCount != candTxCount {
+				findings = append(findings, finding("execution.rpc_surface.transaction_count_mismatch", "Execution RPC transaction count differs", report.SeverityFail, "execution", fmt.Sprintf("eth_getBlockTransactionCountByNumber differs at block %d", commonHead), "Do not migrate traffic until read-only RPC outputs match for deterministic block-derived methods.", []string{DocOPGethDeprecation}, map[string]string{"block_number": fmt.Sprintf("%d", commonHead), "reference_count": fmt.Sprintf("%d", refTxCount), "candidate_count": fmt.Sprintf("%d", candTxCount)}))
+			}
+		}
+	}
+
+	refBlock, err := refClient.BlockByNumber(ctx, commonHead)
+	if err != nil {
+		findings = append(findings, finding("execution.rpc_surface.fetch_reference", "Reference RPC surface check failed", report.SeverityFail, "execution.reference_rpc", err.Error(), "Ensure eth_getBlockByNumber remains available during RPC surface comparison.", []string{DocOPGethDeprecation}, map[string]string{"method": "eth_getBlockByNumber", "block_number": fmt.Sprintf("%d", commonHead)}))
+	} else if rpc.StringValue(refBlock.Hash) == "" {
+		findings = append(findings, finding("execution.rpc_surface.block_hash_missing", "Reference block hash missing", report.SeverityWarn, "execution.reference_rpc", fmt.Sprintf("block %d did not include a hash", commonHead), "Cannot run eth_getBlockByHash comparison without a reference block hash.", []string{DocOPGethDeprecation}, map[string]string{"block_number": fmt.Sprintf("%d", commonHead)}))
+	} else {
+		hash := rpc.StringValue(refBlock.Hash)
+		refByHash, err := refClient.BlockByHash(ctx, hash)
+		if err != nil {
+			findings = append(findings, finding("execution.rpc_surface.fetch_reference", "Reference RPC surface check failed", report.SeverityFail, "execution.reference_rpc", err.Error(), "Ensure eth_getBlockByHash is available on the reference endpoint.", []string{DocOPGethDeprecation}, map[string]string{"method": "eth_getBlockByHash", "block_hash": hash}))
+		} else {
+			candByHash, err := candClient.BlockByHash(ctx, hash)
+			if err != nil {
+				findings = append(findings, finding("execution.rpc_surface.fetch_candidate", "Candidate RPC surface check failed", report.SeverityFail, "execution.candidate_rpc", err.Error(), "Ensure eth_getBlockByHash can retrieve canonical blocks by hash on the candidate endpoint.", []string{DocOPGethDeprecation}, map[string]string{"method": "eth_getBlockByHash", "block_hash": hash}))
+			} else {
+				compared++
+				diffs, missing := CompareBlockFields(refByHash, candByHash)
+				if len(missing) > 0 {
+					findings = append(findings, finding("execution.rpc_surface.block_by_hash_missing_fields", "eth_getBlockByHash omitted compared fields", report.SeverityWarn, "execution", "one or more block-by-hash fields were missing", "Inspect endpoint compatibility; opstack-doctor skipped field equality checks when either side omitted a field.", []string{DocOPGethDeprecation}, map[string]string{"block_hash": hash, "missing": strings.Join(missing, ",")}))
+				}
+				if len(diffs) > 0 {
+					evidence := map[string]string{"block_hash": hash}
+					for _, diff := range diffs {
+						evidence["reference_"+diff.Field] = diff.Reference
+						evidence["candidate_"+diff.Field] = diff.Candidate
+					}
+					findings = append(findings, finding("execution.rpc_surface.block_by_hash_mismatch", "eth_getBlockByHash output differs", report.SeverityFail, "execution", "block-by-hash output differs across reference and candidate", "Do not migrate traffic until block-by-hash output agrees for the same canonical hash.", []string{DocOPGethDeprecation}, evidence))
+				}
+			}
+		}
+	}
+
+	hasFailure := false
+	for _, f := range findings {
+		if f.Severity == report.SeverityFail {
+			hasFailure = true
+			break
+		}
+	}
+	if compared > 0 && !hasFailure {
+		findings = append(findings, finding("execution.rpc_surface.match", "Read-only execution RPC surface matched", report.SeverityOK, "execution", fmt.Sprintf("%d deterministic RPC surface checks matched", compared), "This is still a sample, not exhaustive RPC equivalence; increase coverage before high-risk migrations.", []string{DocOPGethDeprecation}, map[string]string{"block_number": fmt.Sprintf("%d", commonHead), "compared_methods": fmt.Sprintf("%d", compared)}))
 	}
 	return findings
 }

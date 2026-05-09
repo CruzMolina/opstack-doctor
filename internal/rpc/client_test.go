@@ -32,6 +32,17 @@ func TestClientMethods(t *testing.T) {
 				"transactionsRoot": "0xtx",
 				"receiptsRoot":     "0xreceipt",
 			}
+		case "eth_getBlockByHash":
+			result = map[string]any{
+				"number":           "0x2a",
+				"hash":             req.Params[0],
+				"parentHash":       "0xparent",
+				"stateRoot":        "0xstate",
+				"transactionsRoot": "0xtx",
+				"receiptsRoot":     "0xreceipt",
+			}
+		case "eth_getBlockTransactionCountByNumber":
+			result = "0x3"
 		default:
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -59,6 +70,17 @@ func TestClientMethods(t *testing.T) {
 	}
 	if got := StringValue(block.Hash); got != "0xhash" {
 		t.Fatalf("block hash = %q", got)
+	}
+	blockByHash, err := client.BlockByHash(context.Background(), "0xhash")
+	if err != nil {
+		t.Fatalf("BlockByHash() error = %v", err)
+	}
+	if got := StringValue(blockByHash.Hash); got != "0xhash" {
+		t.Fatalf("block-by-hash hash = %q", got)
+	}
+	txCount, err := client.BlockTransactionCountByNumber(context.Background(), 42)
+	if err != nil || txCount != 3 {
+		t.Fatalf("BlockTransactionCountByNumber() = %d, %v", txCount, err)
 	}
 }
 

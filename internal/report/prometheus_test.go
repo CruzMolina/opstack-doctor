@@ -19,6 +19,11 @@ func TestRenderPrometheus(t *testing.T) {
 			Target:   "execution",
 		},
 		{
+			ID:       "execution.rpc_surface.match",
+			Severity: SeverityOK,
+			Target:   "execution",
+		},
+		{
 			ID:       "topology.light-1.rpc_head",
 			Severity: SeverityOK,
 			Target:   "op_nodes.light-1",
@@ -31,9 +36,10 @@ func TestRenderPrometheus(t *testing.T) {
 	}
 	got := out.String()
 	for _, want := range []string{
-		`opstack_doctor_findings{severity="ok"} 3`,
+		`opstack_doctor_findings{severity="ok"} 4`,
 		`opstack_doctor_execution_candidate_lag_blocks{chain="op-mainnet"} 3`,
 		`opstack_doctor_execution_block_compare_match{chain="op-mainnet"} 1`,
+		`opstack_doctor_execution_rpc_surface_match{chain="op-mainnet"} 1`,
 		`opstack_doctor_topology_follower_lag_blocks{chain="op-mainnet",kind="rpc_head",node="light-1",source="source-1"} 2`,
 	} {
 		if !strings.Contains(got, want) {

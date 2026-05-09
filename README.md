@@ -20,8 +20,8 @@ Official references:
 ## What It Checks Today
 
 - Config validity, required fields, valid op-node roles, and declared follow-source topology.
-- Execution JSON-RPC reachability using `web3_clientVersion`, `eth_chainId`, `eth_blockNumber`, and `eth_getBlockByNumber`.
-- Candidate/reference execution head lag and latest common block comparison for hash, parent hash, state root, transactions root, and receipt root when present.
+- Execution JSON-RPC reachability using `web3_clientVersion`, `eth_chainId`, `eth_blockNumber`, and block-read methods.
+- Candidate/reference execution head lag, latest common block comparison, and sampled read-only RPC output comparison using `eth_getBlockByNumber`, `eth_getBlockByHash`, and `eth_getBlockTransactionCountByNumber`.
 - Conservative client-family heuristics for op-geth and op-reth/reth.
 - op-node Prometheus metrics, including `op_node_default_up`, refs, peer counts, derivation errors, pipeline resets, and RPC client latency metric presence.
 - Light/sequencer follower lag against configured source nodes using available RPC and parseable safe-head metrics.
@@ -34,10 +34,27 @@ Official references:
 - op-supervisor-specific behavior or metrics.
 - Actual deployed CLI flags unless represented in the config.
 - proxyd consensus-aware routing behavior.
-- Exhaustive RPC equivalence between op-geth and op-reth.
+- Exhaustive RPC equivalence between op-geth and op-reth; current RPC comparison is sampled and read-only.
 - Grafana dashboard generation or container packaging.
 
 ## Install And Run
+
+Download a release archive and verify its checksum:
+
+```sh
+VERSION=0.1.0
+OS=linux
+ARCH=amd64
+curl -L -O "https://github.com/OWNER/REPO/releases/download/v${VERSION}/opstack-doctor_${VERSION}_${OS}_${ARCH}.tar.gz"
+curl -L -O "https://github.com/OWNER/REPO/releases/download/v${VERSION}/SHA256SUMS"
+sha256sum -c SHA256SUMS --ignore-missing
+tar -xzf "opstack-doctor_${VERSION}_${OS}_${ARCH}.tar.gz"
+./opstack-doctor version
+```
+
+Replace `OWNER/REPO` with the published repository path.
+
+Or build from source:
 
 ```sh
 go build ./cmd/opstack-doctor
@@ -79,9 +96,12 @@ This is equivalent to `check --output prometheus`. It emits generic finding gaug
 
 - `opstack_doctor_execution_candidate_lag_blocks`
 - `opstack_doctor_execution_block_compare_match`
+- `opstack_doctor_execution_rpc_surface_match`
 - `opstack_doctor_topology_follower_lag_blocks`
 
 Run this from a cron job, Kubernetes `CronJob`, or sidecar-style wrapper and expose the output through your normal textfile/scrape path.
+
+See [examples/deploy](examples/deploy) for a node-exporter textfile script and a Kubernetes CronJob template.
 
 ## Configuration
 

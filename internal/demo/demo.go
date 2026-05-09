@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	"opstack-doctor/internal/config"
 )
@@ -147,6 +148,27 @@ func newRPCServer(spec rpcSpec) *httptest.Server {
 				"transactionsRoot": "0x" + spec.salt + "_tx_" + number,
 				"receiptsRoot":     "0x" + spec.salt + "_receipt_" + number,
 			}
+		case "eth_getBlockByHash":
+			var params []any
+			if err := json.Unmarshal(req.Params, &params); err != nil || len(params) == 0 {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			hash, _ := params[0].(string)
+			if !strings.Contains(hash, "0x"+spec.salt+"_hash_") {
+				result = nil
+				break
+			}
+			result = map[string]any{
+				"number":           quantity(spec.head),
+				"hash":             hash,
+				"parentHash":       "0x" + spec.salt + "_parent_by_hash",
+				"stateRoot":        "0x" + spec.salt + "_state_by_hash",
+				"transactionsRoot": "0x" + spec.salt + "_tx_by_hash",
+				"receiptsRoot":     "0x" + spec.salt + "_receipt_by_hash",
+			}
+		case "eth_getBlockTransactionCountByNumber":
+			result = "0x2"
 		default:
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"jsonrpc": "2.0",
