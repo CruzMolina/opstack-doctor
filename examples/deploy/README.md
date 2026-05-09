@@ -22,7 +22,7 @@ Use [kubernetes-cronjob.yaml](kubernetes-cronjob.yaml) when you want Kubernetes 
 - Write into a shared volume consumed by a small HTTP textfile sidecar.
 - Run the same command in an existing internal scheduler that exposes job output as scrapeable metrics.
 
-The CronJob references a `doctor.yaml` ConfigMap and a placeholder container image. Build an internal image from a release tarball or use your existing job-runner base image with the `opstack-doctor` binary installed. Replace placeholder RPC and metrics URLs with internal read-only endpoints. Do not put private keys in the config; `opstack-doctor` does not need them.
+The CronJob references a `doctor.yaml` ConfigMap and the release image pattern `ghcr.io/OWNER/REPO:v0.1.0`. Replace `OWNER/REPO` with the published repository path, or mirror the image into your internal registry. Replace placeholder RPC and metrics URLs with internal read-only endpoints. Do not put private keys in the config; `opstack-doctor` does not need them.
 
 ## Prometheus Alert Rules
 
@@ -33,3 +33,5 @@ opstack-doctor generate alerts --config doctor.yaml --out prometheus-rules.yaml
 ```
 
 The generated `ExecutionCandidateLaggingReference` alert expects the exported `opstack_doctor_execution_candidate_lag_blocks` metric from this scheduled command path.
+
+See [../../docs/alerts.md](../../docs/alerts.md) for the full alert list, doctor-exported metrics, and label assumptions.

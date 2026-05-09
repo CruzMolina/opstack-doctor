@@ -1,0 +1,8 @@
+.git
+.github
+dist
+opstack-doctor
+*.tar.gz
+SHA256SUMS
+tmp
+.DS_Store

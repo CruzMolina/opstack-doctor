@@ -103,6 +103,26 @@ func Alerts(cfg config.Config) ([]byte, error) {
 				"description": "Template alert for lag exported by opstack-doctor check --output prometheus or opstack-doctor export metrics.",
 			},
 		},
+		{
+			Alert:  "ExecutionBlockComparisonMismatch",
+			Expr:   fmt.Sprintf("opstack_doctor_execution_block_compare_match{chain=%q} == 0", cfg.Chain.Name),
+			For:    "5m",
+			Labels: map[string]string{"severity": "critical"},
+			Annotations: map[string]string{
+				"summary":     "execution block comparison is failing",
+				"description": "opstack-doctor observed mismatched block fields across reference and candidate execution clients.",
+			},
+		},
+		{
+			Alert:  "ExecutionRPCSurfaceMismatch",
+			Expr:   fmt.Sprintf("opstack_doctor_execution_rpc_surface_match{chain=%q} == 0", cfg.Chain.Name),
+			For:    "5m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "sampled execution RPC outputs differ",
+				"description": "opstack-doctor observed mismatched or unavailable read-only RPC outputs during migration comparison.",
+			},
+		},
 	}
 	for _, node := range cfg.OPNodes {
 		if node.Role != "light" && node.Role != "sequencer" {

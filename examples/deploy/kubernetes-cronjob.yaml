@@ -57,8 +57,8 @@ spec:
           restartPolicy: Never
           containers:
             - name: opstack-doctor
-              # Placeholder: publish your own internal image that contains the release binary.
-              image: ghcr.io/OWNER/opstack-doctor:v0.1.0
+              # Replace OWNER/REPO with the published repository path, or mirror into an internal registry.
+              image: ghcr.io/OWNER/REPO:v0.1.0
               imagePullPolicy: IfNotPresent
               args:
                 - export

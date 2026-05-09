@@ -61,6 +61,15 @@ go build ./cmd/opstack-doctor
 ./opstack-doctor check --config examples/doctor.example.yaml
 ```
 
+Container images are published for tagged releases:
+
+```sh
+docker run --rm ghcr.io/OWNER/REPO:v0.1.0 version
+docker run --rm -v "$PWD/examples/doctor.example.yaml:/config/doctor.yaml:ro" ghcr.io/OWNER/REPO:v0.1.0 check --config /config/doctor.yaml
+```
+
+Replace `OWNER/REPO` with the published repository path.
+
 The main command is:
 
 ```sh
@@ -137,6 +146,8 @@ opstack-doctor generate runbook --config doctor.yaml --out runbook.md
 The generated alert rules are templates. They assume common metric names and scrape labels such as `node`, `role`, `ref`, and `layer`; adjust selectors to match your Prometheus labeling.
 
 The `ExecutionCandidateLaggingReference` alert assumes you run `opstack-doctor export metrics --config doctor.yaml` or `opstack-doctor check --output prometheus` on a schedule and scrape the emitted `opstack_doctor_execution_candidate_lag_blocks` gauge.
+
+See [docs/alerts.md](docs/alerts.md) for alert assumptions, doctor-exported metrics, and validation notes.
 
 ## Development
 

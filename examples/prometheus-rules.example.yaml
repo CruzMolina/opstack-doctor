@@ -67,3 +67,19 @@ groups:
         annotations:
           summary: execution candidate is lagging reference
           description: Template alert for lag exported by opstack-doctor check --output prometheus or opstack-doctor export metrics.
+      - alert: ExecutionBlockComparisonMismatch
+        expr: opstack_doctor_execution_block_compare_match{chain="op-mainnet"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: execution block comparison is failing
+          description: opstack-doctor observed mismatched block fields across reference and candidate execution clients.
+      - alert: ExecutionRPCSurfaceMismatch
+        expr: opstack_doctor_execution_rpc_surface_match{chain="op-mainnet"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: sampled execution RPC outputs differ
+          description: opstack-doctor observed mismatched or unavailable read-only RPC outputs during migration comparison.

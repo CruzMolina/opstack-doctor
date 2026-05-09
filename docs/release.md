@@ -51,7 +51,7 @@ Pushing the tag starts the release workflow. It builds:
 - `darwin/amd64`
 - `darwin/arm64`
 
-The workflow also uploads `SHA256SUMS` and creates a GitHub release for tag pushes.
+The workflow also uploads `SHA256SUMS`, creates a GitHub release for tag pushes, and publishes multi-arch container images to GHCR.
 
 ## Verify The Release
 
@@ -73,6 +73,16 @@ tar -xzf "opstack-doctor_${VERSION}_${OS}_${ARCH}.tar.gz"
 ```
 
 5. Confirm `opstack-doctor version` prints the tagged version.
+
+If Docker is available, verify the container image too:
+
+```sh
+OWNER_REPO=OWNER/REPO
+docker run --rm "ghcr.io/${OWNER_REPO}:v${VERSION}" version
+docker run --rm "ghcr.io/${OWNER_REPO}:${VERSION}" version
+```
+
+Replace `OWNER/REPO` with the published repository path.
 
 ## Patch Releases
 

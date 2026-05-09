@@ -31,3 +31,15 @@ jobs:
 
       - name: Run vet
         run: go vet ./...
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          build-args: |
+            VERSION=ci
+          tags: opstack-doctor:ci
