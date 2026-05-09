@@ -2,6 +2,7 @@ package generate
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
@@ -53,6 +54,13 @@ func TestAlertsYAMLParsesAndContainsExpectedRules(t *testing.T) {
 		"ProxydEndpointUnhealthy",
 		"DeriverProxydNotConsensusAware",
 		"ProxydMetricsUnavailable",
+		"ProxydDown",
+		"ProxydBackendProbeUnhealthy",
+		"ProxydBackendDegradedOrBanned",
+		"ProxydNoConsensusBackends",
+		"ProxydBackendRequestLatencyHigh",
+		"ProxydBackendErrorRate",
+		"ProxydCLConsensusIssues",
 		"ProxydHeadLaggingBackends",
 		"ExecutionCandidateLaggingReference",
 		"ExecutionBlockComparisonMismatch",
@@ -73,6 +81,13 @@ func TestAlertsYAMLParsesAndContainsExpectedRules(t *testing.T) {
 		if rule.Annotations["summary"] == "" || rule.Annotations["description"] == "" {
 			t.Fatalf("alert %s should include summary and description annotations", alert)
 		}
+	}
+	latencyRule, ok := findRule(parsed, "ProxydBackendRequestLatencyHigh")
+	if !ok {
+		t.Fatalf("missing proxyd latency alert")
+	}
+	if !strings.Contains(latencyRule.Expr, "> 2.000") {
+		t.Fatalf("proxyd latency alert should use default latency threshold, got %q", latencyRule.Expr)
 	}
 }
 

@@ -74,6 +74,62 @@ groups:
           annotations:
             description: The configured proxyd metrics endpoint is missing or unreachable. Check proxyd Prometheus listener and scrape config.
             summary: proxyd metrics are unavailable
+        - alert: ProxydDown
+          expr: proxyd_up != 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            description: proxyd_up is not 1. Check proxyd process health, listener health, and scrape target wiring.
+            summary: proxyd is down
+        - alert: ProxydBackendProbeUnhealthy
+          expr: proxyd_backend_probe_healthy == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            description: A proxyd backend probe reports unhealthy. Check backend health endpoints, source/light-node processes, and network reachability.
+            summary: proxyd backend probe is unhealthy
+        - alert: ProxydBackendDegradedOrBanned
+          expr: (proxyd_backend_degraded > 0) or (proxyd_consensus_backend_banned > 0)
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            description: proxyd marked a backend degraded or banned. Check backend latency, error rates, peer count, sync state, latest-block lag, and consensus divergence.
+            summary: proxyd backend is degraded or banned
+        - alert: ProxydNoConsensusBackends
+          expr: proxyd_group_consensus_count <= 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            description: The consensus-aware backend group has no serving candidates. Check bans, probes, backend sync state, and consensus group filtering.
+            summary: proxyd has no serving consensus backends
+        - alert: ProxydBackendRequestLatencyHigh
+          expr: proxyd_rpc_backend_request_duration_seconds{quantile=~"0.9|0.95|0.99"} > 2.000
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            description: Backend request duration quantiles exceed the configured threshold. Check backend node load, network latency, and proxyd timeout settings.
+            summary: proxyd backend request latency is high
+        - alert: ProxydBackendErrorRate
+          expr: proxyd_backend_error_rate > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            description: proxyd reports backend request errors. Use request/error counters and backend logs to identify the failing backend and methods.
+            summary: proxyd backend error rate is nonzero
+        - alert: ProxydCLConsensusIssues
+          expr: increase({__name__=~"proxyd_consensus_cl_(ban_.*|output_root_disagreement_total|no_pin_candidate_total)"}[5m]) > 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            description: CL/source-tier consensus counters increased. Check op-node backend health, local-safe behavior, output-root agreement, and pin candidate selection.
+            summary: proxyd CL consensus issue observed
         - alert: ExecutionCandidateLaggingReference
           expr: opstack_doctor_execution_candidate_lag_blocks{chain="op-mainnet"} > 4
           for: 5m

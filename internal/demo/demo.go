@@ -31,6 +31,20 @@ type metricsSpec struct {
 	pipelineResets   float64
 }
 
+type proxydMetricsSpec struct {
+	up            float64
+	backends      []string
+	latest        uint64
+	safe          uint64
+	finalized     uint64
+	probeHealthy  float64
+	degraded      float64
+	banned        float64
+	inSync        float64
+	errorCounters float64
+	latency       float64
+}
+
 func Config(scenario string) (config.Config, func(), error) {
 	if scenario == "" {
 		scenario = ScenarioHealthy
@@ -48,8 +62,8 @@ func Config(scenario string) (config.Config, func(), error) {
 		servers = append(servers, srv)
 		return srv.URL
 	}
-	addProxydMetrics := func() string {
-		srv := newProxydMetricsServer()
+	addProxydMetrics := func(spec proxydMetricsSpec) string {
+		srv := newProxydMetricsServer(spec)
 		servers = append(servers, srv)
 		return srv.URL
 	}
@@ -101,8 +115,8 @@ func Config(scenario string) (config.Config, func(), error) {
 		cfg.Proxyd = config.ProxydConfig{
 			Enabled: true,
 			Endpoints: []config.ProxydEndpointConfig{
-				{Name: "deriver-proxyd", Role: "deriver", RPC: addRPC(rpcSpec{version: "proxyd/deriver", chainID: 10, head: 100, salt: "proxyd"}), Metrics: addProxydMetrics(), ConsensusAware: true, ExpectedBackends: []string{"source-1", "source-2"}},
-				{Name: "edge-proxyd", Role: "edge", RPC: addRPC(rpcSpec{version: "proxyd/edge", chainID: 10, head: 99, salt: "edge"}), Metrics: addProxydMetrics(), ConsensusAware: true, ExpectedBackends: []string{"light-1"}},
+				{Name: "deriver-proxyd", Role: "deriver", RPC: addRPC(rpcSpec{version: "proxyd/deriver", chainID: 10, head: 100, salt: "proxyd"}), Metrics: addProxydMetrics(proxydMetricsSpec{up: 1, backends: []string{"source-1", "source-2"}, latest: 100, safe: 99, finalized: 95, probeHealthy: 1, inSync: 1, latency: 0.2}), ConsensusAware: true, ExpectedBackends: []string{"source-1", "source-2"}},
+				{Name: "edge-proxyd", Role: "edge", RPC: addRPC(rpcSpec{version: "proxyd/edge", chainID: 10, head: 99, salt: "edge"}), Metrics: addProxydMetrics(proxydMetricsSpec{up: 1, backends: []string{"light-1"}, latest: 99, safe: 98, finalized: 94, probeHealthy: 1, inSync: 1, latency: 0.2}), ConsensusAware: true, ExpectedBackends: []string{"light-1"}},
 			},
 		}
 	case ScenarioWarn:
@@ -118,7 +132,7 @@ func Config(scenario string) (config.Config, func(), error) {
 		cfg.Proxyd = config.ProxydConfig{
 			Enabled: true,
 			Endpoints: []config.ProxydEndpointConfig{
-				{Name: "deriver-proxyd", Role: "deriver", RPC: addRPC(rpcSpec{version: "proxyd/deriver", chainID: 10, head: 70, salt: "proxyd"}), Metrics: addProxydMetrics(), ConsensusAware: false, ExpectedBackends: []string{"source-1"}},
+				{Name: "deriver-proxyd", Role: "deriver", RPC: addRPC(rpcSpec{version: "proxyd/deriver", chainID: 10, head: 70, salt: "proxyd"}), Metrics: addProxydMetrics(proxydMetricsSpec{up: 1, backends: []string{"source-1"}, latest: 70, safe: 69, finalized: 65, probeHealthy: 1, inSync: 1, latency: 0.2}), ConsensusAware: false, ExpectedBackends: []string{"source-1"}},
 			},
 		}
 	case ScenarioFail:
@@ -134,7 +148,7 @@ func Config(scenario string) (config.Config, func(), error) {
 		cfg.Proxyd = config.ProxydConfig{
 			Enabled: true,
 			Endpoints: []config.ProxydEndpointConfig{
-				{Name: "deriver-proxyd", Role: "deriver", RPC: addRPC(rpcSpec{version: "proxyd/deriver", chainID: 999, head: 40, salt: "proxyd"}), Metrics: addProxydMetrics(), ConsensusAware: false, ExpectedBackends: []string{"source-1"}},
+				{Name: "deriver-proxyd", Role: "deriver", RPC: addRPC(rpcSpec{version: "proxyd/deriver", chainID: 999, head: 40, salt: "proxyd"}), Metrics: addProxydMetrics(proxydMetricsSpec{up: 0, backends: []string{"source-1"}, latest: 40, safe: 39, finalized: 35, probeHealthy: 0, degraded: 1, banned: 1, errorCounters: 1, latency: 3}), ConsensusAware: false, ExpectedBackends: []string{"source-1"}},
 			},
 		}
 	default:
@@ -230,11 +244,35 @@ func newMetricsServer(spec metricsSpec) *httptest.Server {
 	}))
 }
 
-func newProxydMetricsServer() *httptest.Server {
+func newProxydMetricsServer(spec proxydMetricsSpec) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "proxyd_rpc_requests_total{backend=\"source-1\",method=\"eth_blockNumber\"} 12")
-		fmt.Fprintln(w, "proxyd_backend_up{backend=\"source-1\"} 1")
-		fmt.Fprintln(w, "proxyd_backend_request_duration_seconds_count{backend=\"source-1\"} 12")
+		if len(spec.backends) == 0 {
+			spec.backends = []string{"source-1"}
+		}
+		fmt.Fprintf(w, "proxyd_up %.0f\n", spec.up)
+		fmt.Fprintf(w, "proxyd_group_consensus_latest_block{backend_group_name=\"demo\"} %d\n", spec.latest)
+		fmt.Fprintf(w, "proxyd_group_consensus_safe_block{backend_group_name=\"demo\"} %d\n", spec.safe)
+		fmt.Fprintf(w, "proxyd_group_consensus_finalized_block{backend_group_name=\"demo\"} %d\n", spec.finalized)
+		fmt.Fprintf(w, "proxyd_group_consensus_count{backend_group_name=\"demo\"} %d\n", len(spec.backends))
+		fmt.Fprintf(w, "proxyd_group_consensus_total_count{backend_group_name=\"demo\"} %d\n", len(spec.backends))
+		fmt.Fprintf(w, "proxyd_consensus_cl_group_local_safe_block{backend_group_name=\"demo\"} %d\n", spec.safe)
+		fmt.Fprintf(w, "proxyd_rpc_errors_total{auth=\"none\",backend_name=\"proxyd\",method_name=\"eth_blockNumber\",error_code=\"0\"} %.0f\n", spec.errorCounters)
+		fmt.Fprintln(w, "proxyd_rpc_special_errors_total{auth=\"none\",backend_name=\"proxyd\",method_name=\"eth_blockNumber\",error_type=\"none\"} 0")
+		fmt.Fprintln(w, "proxyd_unserviceable_requests_total{auth=\"none\",request_source=\"http\"} 0")
+		fmt.Fprintln(w, "proxyd_too_many_request_errors_total{backend_name=\"proxyd\"} 0")
+		fmt.Fprintln(w, "proxyd_redis_errors_total{source=\"cache\"} 0")
+		fmt.Fprintln(w, "proxyd_consensus_cl_ban_not_healthy_total{backend_name=\"source-1\"} 0")
+		fmt.Fprintln(w, "proxyd_consensus_cl_output_root_disagreement_total{backend_name=\"source-1\"} 0")
+		for _, backend := range spec.backends {
+			fmt.Fprintf(w, "proxyd_backend_probe_healthy{backend_name=\"%s\"} %.0f\n", backend, spec.probeHealthy)
+			fmt.Fprintf(w, "proxyd_backend_degraded{backend_name=\"%s\"} %.0f\n", backend, spec.degraded)
+			fmt.Fprintf(w, "proxyd_consensus_backend_banned{backend_name=\"%s\"} %.0f\n", backend, spec.banned)
+			fmt.Fprintf(w, "proxyd_consensus_backend_in_sync{backend_name=\"%s\"} %.0f\n", backend, spec.inSync)
+			fmt.Fprintf(w, "proxyd_consensus_backend_peer_count{backend_name=\"%s\"} 3\n", backend)
+			fmt.Fprintf(w, "proxyd_backend_error_rate{backend_name=\"%s\"} %.0f\n", backend, spec.errorCounters)
+			fmt.Fprintf(w, "proxyd_rpc_backend_request_duration_seconds{backend_name=\"%s\",method_name=\"eth_blockNumber\",batched=\"false\",quantile=\"0.95\"} %.3f\n", backend, spec.latency)
+			fmt.Fprintf(w, "proxyd_rpc_backend_request_duration_seconds_count{backend_name=\"%s\",method_name=\"eth_blockNumber\",batched=\"false\"} 12\n", backend)
+		}
 	}))
 }
 
