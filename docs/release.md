@@ -13,19 +13,16 @@ git status --short --branch
 Run the local verification suite:
 
 ```sh
-gofmt -w ./cmd ./internal
-go test ./...
-go vet ./...
-go build ./cmd/opstack-doctor
+make release-check
 ```
 
-Run smoke checks:
+`VERSION` is the release version used by Make targets and should match the tag without the leading `v`.
+
+If Docker is available, verify the local image path too:
 
 ```sh
-go run ./cmd/opstack-doctor version
-go run ./cmd/opstack-doctor demo --scenario healthy --output human
-go run ./cmd/opstack-doctor demo --scenario warn --output json
-go run ./cmd/opstack-doctor demo --scenario fail --output prometheus
+make docker-build
+make docker-smoke
 ```
 
 Review operator-facing docs touched by the release:
@@ -34,12 +31,21 @@ Review operator-facing docs touched by the release:
 git diff -- README.md docs examples
 ```
 
+Review version and release notes:
+
+```sh
+cat VERSION
+sed -n '1,120p' CHANGELOG.md
+sed -n '1,160p' docs/releases/v0.1.0.md
+```
+
 ## Tag And Publish
 
 Use semantic version tags prefixed with `v`:
 
 ```sh
 VERSION=0.1.0
+test "$(cat VERSION)" = "${VERSION}"
 git tag "v${VERSION}"
 git push origin "v${VERSION}"
 ```
@@ -73,6 +79,7 @@ tar -xzf "opstack-doctor_${VERSION}_${OS}_${ARCH}.tar.gz"
 ```
 
 5. Confirm `opstack-doctor version` prints the tagged version.
+6. Compare the GitHub release notes against `docs/releases/v0.1.0.md` and `CHANGELOG.md`.
 
 If Docker is available, verify the container image too:
 

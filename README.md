@@ -159,6 +159,14 @@ make vet
 
 Maintainers cutting a release should follow [docs/release.md](docs/release.md).
 
+Useful release-prep targets:
+
+```sh
+make release-check
+make docker-build
+make docker-smoke
+```
+
 ## Roadmap
 
 - Deeper op-reth/op-geth RPC comparison.
@@ -166,5 +174,4 @@ Maintainers cutting a release should follow [docs/release.md](docs/release.md).
 - proxyd topology checks.
 - Grafana dashboard generation.
 - Dependency-set config discovery.
-- Optional container image.
 - Upstreaming useful checks into Optimism docs/tooling.
