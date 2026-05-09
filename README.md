@@ -107,6 +107,8 @@ See [examples/deploy](examples/deploy) for a node-exporter textfile script and a
 
 Start with [examples/doctor.example.yaml](examples/doctor.example.yaml). The config expresses intended topology; the tool validates behavior through read-only RPC and metrics checks.
 
+See [docs/config.md](docs/config.md) for a field-by-field schema reference.
+
 For local or mocked endpoints, point `reference_rpc`, `candidate_rpc`, op-node `rpc`, and `metrics` URLs at local `httptest`, anvil-style, or fixture servers that implement the small method set used by the MVP. Tests in this repository do this and never hit public RPC endpoints.
 
 ## Local Demo
@@ -143,6 +145,8 @@ make fmt
 make test
 make vet
 ```
+
+Maintainers cutting a release should follow [docs/release.md](docs/release.md).
 
 ## Roadmap
 
