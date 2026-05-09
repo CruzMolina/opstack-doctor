@@ -30,6 +30,7 @@ type Rule struct {
 }
 
 func Alerts(cfg config.Config) ([]byte, error) {
+	cfg.ApplyDefaults()
 	sourceSelector := nodeSelector(nodesWithRole(cfg, "source"), "role=\"source\"")
 	rules := []Rule{
 		{
@@ -124,6 +125,76 @@ func Alerts(cfg config.Config) ([]byte, error) {
 			},
 		},
 		{
+			Alert:  "ProxydDown",
+			Expr:   "proxyd_up != 1",
+			For:    "2m",
+			Labels: map[string]string{"severity": "critical"},
+			Annotations: map[string]string{
+				"summary":     "proxyd is down",
+				"description": "proxyd_up is not 1. Check proxyd process health, listener health, and scrape target wiring.",
+			},
+		},
+		{
+			Alert:  "ProxydBackendProbeUnhealthy",
+			Expr:   "proxyd_backend_probe_healthy == 0",
+			For:    "5m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "proxyd backend probe is unhealthy",
+				"description": "A proxyd backend probe reports unhealthy. Check backend health endpoints, source/light-node processes, and network reachability.",
+			},
+		},
+		{
+			Alert:  "ProxydBackendDegradedOrBanned",
+			Expr:   "(proxyd_backend_degraded > 0) or (proxyd_consensus_backend_banned > 0)",
+			For:    "5m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "proxyd backend is degraded or banned",
+				"description": "proxyd marked a backend degraded or banned. Check backend latency, error rates, peer count, sync state, latest-block lag, and consensus divergence.",
+			},
+		},
+		{
+			Alert:  "ProxydNoConsensusBackends",
+			Expr:   "proxyd_group_consensus_count <= 0",
+			For:    "2m",
+			Labels: map[string]string{"severity": "critical"},
+			Annotations: map[string]string{
+				"summary":     "proxyd has no serving consensus backends",
+				"description": "The consensus-aware backend group has no serving candidates. Check bans, probes, backend sync state, and consensus group filtering.",
+			},
+		},
+		{
+			Alert:  "ProxydBackendRequestLatencyHigh",
+			Expr:   fmt.Sprintf("proxyd_rpc_backend_request_duration_seconds{quantile=~\"0.9|0.95|0.99\"} > %.3f", cfg.Thresholds.MaxRPCLatencySeconds),
+			For:    "5m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "proxyd backend request latency is high",
+				"description": "Backend request duration quantiles exceed the configured threshold. Check backend node load, network latency, and proxyd timeout settings.",
+			},
+		},
+		{
+			Alert:  "ProxydBackendErrorRate",
+			Expr:   "proxyd_backend_error_rate > 0",
+			For:    "5m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "proxyd backend error rate is nonzero",
+				"description": "proxyd reports backend request errors. Use request/error counters and backend logs to identify the failing backend and methods.",
+			},
+		},
+		{
+			Alert:  "ProxydCLConsensusIssues",
+			Expr:   "increase({__name__=~\"proxyd_consensus_cl_(ban_.*|output_root_disagreement_total|no_pin_candidate_total)\"}[5m]) > 0",
+			For:    "1m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "proxyd CL consensus issue observed",
+				"description": "CL/source-tier consensus counters increased. Check op-node backend health, local-safe behavior, output-root agreement, and pin candidate selection.",
+			},
+		},
+		{
 			Alert:  "ExecutionCandidateLaggingReference",
 			Expr:   fmt.Sprintf("opstack_doctor_execution_candidate_lag_blocks{chain=%q} > %d", cfg.Chain.Name, cfg.Execution.MaxHeadLagBlocks),
 			For:    "5m",
@@ -202,6 +273,7 @@ func Alerts(cfg config.Config) ([]byte, error) {
 }
 
 func Runbook(cfg config.Config) []byte {
+	cfg.ApplyDefaults()
 	var b bytes.Buffer
 	write := func(format string, args ...any) {
 		fmt.Fprintf(&b, format, args...)
@@ -270,6 +342,7 @@ func Runbook(cfg config.Config) []byte {
 
 	write("## Monitoring Checklist\n\n")
 	write("- Scrape `op_node_default_up`, `op_node_default_refs_number`, peer count metrics, derivation errors, pipeline resets, and RPC client latency metrics.\n")
+	write("- Scrape proxyd metrics such as `proxyd_up`, `proxyd_backend_probe_healthy`, `proxyd_group_consensus_count`, `proxyd_backend_degraded`, `proxyd_consensus_backend_banned`, `proxyd_backend_error_rate`, and `proxyd_rpc_backend_request_duration_seconds`.\n")
 	write("- Use the generated Prometheus rules as templates; adjust selectors to your actual scrape labels.\n")
 	write("- Keep source-tier alerts distinct from light-node capacity alerts.\n")
 	write("- Track execution candidate lag via a scheduled doctor run or an equivalent recording rule.\n\n")
@@ -283,6 +356,12 @@ func Runbook(cfg config.Config) []byte {
 	write("1. Compare proxyd `eth_blockNumber` with each declared backend.\n2. Check proxyd backend health, consensus-aware routing state, and backend group config.\n3. For deriver proxyd, verify at least two healthy source-node backends are available.\n\n")
 	write("### DeriverProxydNotConsensusAware / ProxydMetricsUnavailable\n\n")
 	write("1. Inspect proxyd deployment config and confirm consensus-aware routing is enabled where production deriver traffic depends on proxyd.\n2. Verify proxyd Prometheus listener, scrape labels, and dashboard coverage.\n3. Keep doctor config aligned with actual proxyd backend groups; this tool does not introspect private proxyd TOML.\n\n")
+	write("### ProxydDown / ProxydBackendProbeUnhealthy\n\n")
+	write("1. Confirm proxyd is running and serving both RPC and metrics listeners.\n2. Check backend probe URLs, backend process health, and network policy.\n3. If source-node backends are unhealthy, move dependent light/sequencer nodes to a healthy source-tier endpoint.\n\n")
+	write("### ProxydBackendDegradedOrBanned / ProxydNoConsensusBackends\n\n")
+	write("1. Inspect proxyd consensus-aware backend state and ban reasons.\n2. Compare backend latest, safe, finalized, peer count, sync state, latency, and error-rate metrics.\n3. Restore at least one healthy backend immediately; for deriver/source tiers, restore redundancy before considering the incident closed.\n\n")
+	write("### ProxydBackendRequestLatencyHigh / ProxydBackendErrorRate / ProxydCLConsensusIssues\n\n")
+	write("1. Use labels such as `backend_name`, `method_name`, and `backend_group_name` to identify the affected backend and method.\n2. Check backend node logs, disk/network saturation, L1 RPC health, and output-root/local-safe agreement.\n3. Treat increases in CL ban and output-root disagreement counters as source-tier correctness incidents, not just capacity incidents.\n\n")
 	write("### OpNodeLowPeerCount\n\n")
 	write("1. Check P2P listen address, advertised address, firewall, and bootnodes.\n2. Confirm peer limits and discovery settings.\n3. Correlate with unsafe-head advancement and derivation health.\n\n")
 	write("### OpNodeDerivationErrors / OpNodePipelineResets\n\n")

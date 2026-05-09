@@ -56,6 +56,27 @@ op_node_default_pipeline_resets_total
 
 Adjust selectors if your scrape labels use names such as `instance`, `job`, `chain`, `ref_name`, or `type` instead.
 
+proxyd metric labels also vary by deployment and version. The native proxyd alert templates assume official metric names and common labels such as:
+
+- `backend_name`: proxyd backend identity.
+- `backend_group_name`: proxyd backend group.
+- `method_name`: JSON-RPC method routed to a backend.
+- `status_code` or `code`: HTTP response code labels.
+
+Before production use, compare generated proxyd selectors against series such as:
+
+```promql
+proxyd_up
+proxyd_backend_probe_healthy
+proxyd_group_consensus_count
+proxyd_group_consensus_latest_block
+proxyd_backend_degraded
+proxyd_consensus_backend_banned
+proxyd_consensus_backend_in_sync
+proxyd_backend_error_rate
+proxyd_rpc_backend_request_duration_seconds
+```
+
 ## Generated Alerts
 
 | Alert | Source metric family | Purpose |
@@ -69,6 +90,13 @@ Adjust selectors if your scrape labels use names such as `instance`, `job`, `cha
 | `ProxydEndpointUnhealthy` | doctor export | Detects configured proxyd RPC, head, or chain ID failures. |
 | `DeriverProxydNotConsensusAware` | doctor export | Detects deriver proxyd endpoints not declared consensus-aware in doctor config. |
 | `ProxydMetricsUnavailable` | doctor export | Detects missing or unreachable proxyd metrics endpoints. |
+| `ProxydDown` | `proxyd_up` | Detects proxyd process health reporting down. |
+| `ProxydBackendProbeUnhealthy` | `proxyd_backend_probe_healthy` | Detects unhealthy proxyd backend probes. |
+| `ProxydBackendDegradedOrBanned` | proxyd backend health gauges | Detects degraded or consensus-banned backends. |
+| `ProxydNoConsensusBackends` | `proxyd_group_consensus_count` | Detects zero serving consensus-aware backend candidates. |
+| `ProxydBackendRequestLatencyHigh` | `proxyd_rpc_backend_request_duration_seconds` | Detects high proxyd backend latency quantiles. |
+| `ProxydBackendErrorRate` | `proxyd_backend_error_rate` | Detects nonzero proxyd backend error-rate gauges. |
+| `ProxydCLConsensusIssues` | proxyd CL/source-tier consensus counters | Detects source-tier consensus ban, output-root disagreement, or pin-candidate counter increases. |
 | `ProxydHeadLaggingBackends` | doctor export | Detects proxyd RPC head lag behind declared backends. |
 | `LightNodeLaggingSource` | `op_node_default_refs_number` | Detects follower safe-head lag behind configured source. |
 | `ExecutionCandidateLaggingReference` | doctor export | Detects candidate execution lag. |

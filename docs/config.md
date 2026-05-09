@@ -80,7 +80,7 @@ Validation behavior:
 
 ## `proxyd`
 
-`proxyd` describes intended RPC routing endpoints. `opstack-doctor` does not read private proxyd TOML and does not claim to verify live flags. It checks externally visible RPC/metrics endpoints and compares proxyd heads against the op-node backends named in config.
+`proxyd` describes intended RPC routing endpoints. `opstack-doctor` does not read private proxyd TOML and does not claim to verify live flags. It checks externally visible RPC/metrics endpoints, compares proxyd heads against the op-node backends named in config, and reports native proxyd metrics when they are exposed.
 
 | Field | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -112,6 +112,8 @@ Validation behavior:
 - `deriver` backends must be `source` op-nodes.
 - A deriver proxyd with fewer than two expected source backends emits a warning.
 - A deriver proxyd without `consensus_aware: true` emits a warning.
+- `proxyd_up != 1` emits a failure. Missing key proxyd metrics usually emit warnings or info, depending on whether the metric is required for basic readiness or version/feature-specific observability.
+- Native proxyd metric checks currently cover process up status, backend probe health, degraded or banned backends, backend sync state, peer-count metric presence, consensus latest/safe/finalized gauges, serving consensus backend counts, CL/source-tier consensus counters, backend error rate, HTTP/backend error-code counters, and backend request latency quantiles.
 
 ## `interop`
 
@@ -137,7 +139,7 @@ Interop checks are basic readiness checks only. They verify dependency RPC reach
 | --- | --- | --- | --- | --- |
 | `max_safe_lag_blocks` | integer | no | `20` | Warning threshold for follower safe-head or RPC-head lag behind source. |
 | `min_peer_count` | number | no | `1` | Warning threshold for `op_node_default_peer_count` or `op_node_default_p2p_peer_count`. |
-| `max_rpc_latency_seconds` | number | no | `2.0` | Reserved for latency-oriented alert templates and future checks. |
+| `max_rpc_latency_seconds` | number | no | `2.0` | Warning threshold for observed op-node/proxyd RPC latency metrics and generated latency alert templates. |
 
 ## Severity Notes
 

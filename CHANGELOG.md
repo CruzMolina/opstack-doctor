@@ -4,7 +4,14 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
-## 0.1.1 - Unreleased
+## 0.1.2 - Unreleased
+
+### Added
+
+- proxyd-native metric checks for process up status, backend probes, degraded or banned backends, consensus counts, consensus block gauges, CL/source-tier consensus counters, backend error counters, and backend request latency.
+- Prometheus alert templates for proxyd-native process, backend health, consensus, latency, and CL consensus signals.
+
+## 0.1.1 - 2026-05-09
 
 ### Added
 

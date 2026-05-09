@@ -123,6 +123,64 @@ func TestRunnerFlagsProxydRoutingRisks(t *testing.T) {
 	}
 }
 
+func TestRunnerFlagsProxydNativeMetricRisks(t *testing.T) {
+	sourceRPC := newRPCServer(t, "op-node/source", 10, 100)
+	defer sourceRPC.Close()
+	proxydRPC := newRPCServer(t, "proxyd/deriver", 10, 100)
+	defer proxydRPC.Close()
+	refRPC := newRPCServer(t, "op-reth/ref", 10, 100)
+	defer refRPC.Close()
+	candRPC := newRPCServer(t, "op-reth/cand", 10, 100)
+	defer candRPC.Close()
+	proxydMetrics := newProxydRiskMetricsServer(t)
+	defer proxydMetrics.Close()
+
+	cfg := config.Config{
+		Chain: config.ChainConfig{Name: "op-mainnet", ChainID: 10},
+		Execution: config.ExecutionConfig{
+			ReferenceRPC:     refRPC.URL,
+			CandidateRPC:     candRPC.URL,
+			CompareBlocks:    1,
+			MaxHeadLagBlocks: 4,
+		},
+		OPNodes: []config.OPNodeConfig{
+			{Name: "source-1", Role: "source", RPC: sourceRPC.URL},
+			{Name: "light-1", Role: "light", Follows: "source-1"},
+		},
+		Proxyd: config.ProxydConfig{
+			Enabled: true,
+			Endpoints: []config.ProxydEndpointConfig{
+				{Name: "deriver-proxyd", Role: "deriver", RPC: proxydRPC.URL, Metrics: proxydMetrics.URL, ConsensusAware: true, ExpectedBackends: []string{"source-1"}},
+			},
+		},
+		Thresholds: config.ThresholdsConfig{MaxSafeLagBlocks: 20, MinPeerCount: 1, MaxRPCLatencySeconds: 2},
+	}
+	cfg.ApplyDefaults()
+	findings := Runner{Timeout: time.Second}.Run(context.Background(), cfg)
+	for _, id := range []string{
+		"proxyd.deriver-proxyd.up",
+		"proxyd.deriver-proxyd.backend_probe_healthy",
+		"proxyd.deriver-proxyd.backend_degraded",
+		"proxyd.deriver-proxyd.backend_banned",
+		"proxyd.deriver-proxyd.backend_in_sync",
+		"proxyd.deriver-proxyd.error_counters",
+		"proxyd.deriver-proxyd.cl_consensus_counters",
+		"proxyd.deriver-proxyd.backend_error_rate",
+		"proxyd.deriver-proxyd.backend_latency",
+		"proxyd.deriver-proxyd.consensus_count",
+	} {
+		if !hasFinding(findings, id) {
+			t.Fatalf("missing finding %s; got ids %s", id, findingIDs(findings))
+		}
+	}
+	if !hasFailFinding(findings, "proxyd.deriver-proxyd.up") {
+		t.Fatalf("expected proxyd up failure; got %+v", findings)
+	}
+	if !hasWarnFinding(findings, "proxyd.deriver-proxyd.backend_latency") {
+		t.Fatalf("expected proxyd latency warning; got %+v", findings)
+	}
+}
+
 func newRPCServer(t *testing.T, version string, chainID, head uint64) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -204,8 +262,65 @@ op_node_default_rpc_client_request_duration_seconds_count{method="eth_getBlockBy
 func newProxydMetricsServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	body := `
-proxyd_rpc_requests_total{backend="source-1",method="eth_blockNumber"} 10
-proxyd_backend_up{backend="source-1"} 1
+proxyd_up 1
+proxyd_group_consensus_latest_block{backend_group_name="deriver"} 100
+proxyd_group_consensus_safe_block{backend_group_name="deriver"} 99
+proxyd_group_consensus_finalized_block{backend_group_name="deriver"} 95
+proxyd_group_consensus_count{backend_group_name="deriver"} 2
+proxyd_group_consensus_total_count{backend_group_name="deriver"} 2
+proxyd_consensus_cl_group_local_safe_block{backend_group_name="deriver"} 99
+proxyd_backend_probe_healthy{backend_name="source-1"} 1
+proxyd_backend_probe_healthy{backend_name="source-2"} 1
+proxyd_backend_degraded{backend_name="source-1"} 0
+proxyd_backend_degraded{backend_name="source-2"} 0
+proxyd_consensus_backend_banned{backend_name="source-1"} 0
+proxyd_consensus_backend_banned{backend_name="source-2"} 0
+proxyd_consensus_backend_in_sync{backend_name="source-1"} 1
+proxyd_consensus_backend_in_sync{backend_name="source-2"} 1
+proxyd_consensus_backend_peer_count{backend_name="source-1"} 3
+proxyd_consensus_backend_peer_count{backend_name="source-2"} 3
+proxyd_backend_error_rate{backend_name="source-1"} 0
+proxyd_backend_error_rate{backend_name="source-2"} 0
+proxyd_rpc_errors_total{auth="none",backend_name="source-1",method_name="eth_blockNumber",error_code="0"} 0
+proxyd_rpc_special_errors_total{auth="none",backend_name="source-1",method_name="eth_blockNumber",error_type="none"} 0
+proxyd_unserviceable_requests_total{auth="none",request_source="http"} 0
+proxyd_too_many_request_errors_total{backend_name="source-1"} 0
+proxyd_redis_errors_total{source="cache"} 0
+proxyd_consensus_cl_ban_not_healthy_total{backend_name="source-1"} 0
+proxyd_consensus_cl_output_root_disagreement_total{backend_name="source-1"} 0
+proxyd_http_response_codes_total{status_code="200"} 1
+proxyd_rpc_backend_request_duration_seconds{backend_name="source-1",method_name="eth_blockNumber",batched="false",quantile="0.95"} 0.2
+proxyd_rpc_backend_request_duration_seconds_count{backend_name="source-1",method_name="eth_blockNumber",batched="false"} 10
+`
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+}
+
+func newProxydRiskMetricsServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	body := `
+proxyd_up 0
+proxyd_group_consensus_latest_block{backend_group_name="deriver"} 100
+proxyd_group_consensus_safe_block{backend_group_name="deriver"} 99
+proxyd_group_consensus_finalized_block{backend_group_name="deriver"} 95
+proxyd_group_consensus_count{backend_group_name="deriver"} 0
+proxyd_group_consensus_total_count{backend_group_name="deriver"} 1
+proxyd_consensus_cl_group_local_safe_block{backend_group_name="deriver"} 99
+proxyd_backend_probe_healthy{backend_name="source-1"} 0
+proxyd_backend_degraded{backend_name="source-1"} 1
+proxyd_consensus_backend_banned{backend_name="source-1"} 1
+proxyd_consensus_backend_in_sync{backend_name="source-1"} 0
+proxyd_consensus_backend_peer_count{backend_name="source-1"} 0
+proxyd_backend_error_rate{backend_name="source-1"} 1
+proxyd_rpc_errors_total{auth="none",backend_name="source-1",method_name="eth_blockNumber",error_code="-32000"} 4
+proxyd_rpc_special_errors_total{auth="none",backend_name="source-1",method_name="eth_blockNumber",error_type="timeout"} 1
+proxyd_unserviceable_requests_total{auth="none",request_source="http"} 2
+proxyd_consensus_cl_ban_not_healthy_total{backend_name="source-1"} 1
+proxyd_consensus_cl_output_root_disagreement_total{backend_name="source-1"} 1
+proxyd_http_response_codes_total{status_code="500"} 1
+proxyd_rpc_backend_request_duration_seconds{backend_name="source-1",method_name="eth_blockNumber",batched="false",quantile="0.95"} 3.5
+proxyd_rpc_backend_request_duration_seconds_count{backend_name="source-1",method_name="eth_blockNumber",batched="false"} 10
 `
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(body))
@@ -224,6 +339,15 @@ func hasFinding(findings []report.Finding, id string) bool {
 func hasWarnFinding(findings []report.Finding, id string) bool {
 	for _, f := range findings {
 		if f.ID == id && f.Severity == report.SeverityWarn {
+			return true
+		}
+	}
+	return false
+}
+
+func hasFailFinding(findings []report.Finding, id string) bool {
+	for _, f := range findings {
+		if f.ID == id && f.Severity == report.SeverityFail {
 			return true
 		}
 	}

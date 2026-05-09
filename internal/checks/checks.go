@@ -599,7 +599,7 @@ func (r Runner) checkProxydEndpoint(ctx context.Context, cfg config.Config, endp
 	findings = append(findings, checkProxydConsensusIntent(endpoint))
 	probe, probeFindings := r.probeProxydRPC(ctx, cfg, endpoint)
 	findings = append(findings, probeFindings...)
-	findings = append(findings, r.checkProxydMetrics(ctx, endpoint)...)
+	findings = append(findings, r.checkProxydMetrics(ctx, endpoint, cfg.Thresholds)...)
 	findings = append(findings, r.checkProxydBackends(ctx, cfg, endpoint, nodes, probe)...)
 	if len(endpoint.ExpectedBackends) > 0 {
 		findings = append(findings, finding("proxyd."+endpoint.Name+".backends", "proxyd expected backends are declared", report.SeverityOK, target, fmt.Sprintf("%d expected backends configured", len(endpoint.ExpectedBackends)), "Keep this list aligned with proxyd backend groups and service discovery.", []string{DocLightNodes, DocProxyd}, map[string]string{"backend_count": fmt.Sprintf("%d", len(endpoint.ExpectedBackends)), "role": endpoint.Role}))
@@ -650,7 +650,7 @@ func (r Runner) probeProxydRPC(ctx context.Context, cfg config.Config, endpoint 
 	return proxydEndpointProbe{head: head, headOK: true}, findings
 }
 
-func (r Runner) checkProxydMetrics(ctx context.Context, endpoint config.ProxydEndpointConfig) []report.Finding {
+func (r Runner) checkProxydMetrics(ctx context.Context, endpoint config.ProxydEndpointConfig, thresholds config.ThresholdsConfig) []report.Finding {
 	target := proxydTarget(endpoint) + ".metrics"
 	if strings.TrimSpace(endpoint.Metrics) == "" {
 		return []report.Finding{finding("proxyd."+endpoint.Name+".metrics", "proxyd metrics endpoint is not configured", report.SeverityWarn, target, "metrics URL is empty", "Configure proxyd Prometheus metrics so request latency, error rates, backend health, and consensus routing can be observed.", []string{DocProxyd, DocMetrics}, nil)}
@@ -665,8 +665,264 @@ func (r Runner) checkProxydMetrics(ctx context.Context, endpoint config.ProxydEn
 		findings = append(findings, finding("proxyd."+endpoint.Name+".metrics_names", "proxyd metric names were not detected", report.SeverityInfo, target, "no parsed metric name started with proxyd", "This may be normal if metrics are renamed or relabeled; manually confirm the endpoint exposes proxyd backend health and routing metrics.", []string{DocProxyd, DocMetrics}, map[string]string{"samples": fmt.Sprintf("%d", len(samples)), "role": endpoint.Role}))
 	} else {
 		findings = append(findings, finding("proxyd."+endpoint.Name+".metrics_names", "proxyd metric names are present", report.SeverityOK, target, fmt.Sprintf("%d proxyd metric samples parsed", proxydSeries), "No action needed.", []string{DocProxyd, DocMetrics}, map[string]string{"proxyd_samples": fmt.Sprintf("%d", proxydSeries), "role": endpoint.Role}))
+		findings = append(findings, checkProxydNativeMetrics(endpoint, samples, thresholds)...)
 	}
 	return findings
+}
+
+func checkProxydNativeMetrics(endpoint config.ProxydEndpointConfig, samples []metrics.Sample, thresholds config.ThresholdsConfig) []report.Finding {
+	var findings []report.Finding
+	target := proxydTarget(endpoint) + ".metrics"
+
+	up := metrics.Find(samples, "proxyd_up")
+	switch {
+	case len(up) == 0:
+		findings = append(findings, finding("proxyd."+endpoint.Name+".up_missing", "proxyd up metric is missing", report.SeverityWarn, target, "proxyd_up was not present", "Expose proxyd_up so Prometheus can distinguish scrape reachability from proxyd process health.", []string{DocProxyd, DocMetrics}, nil))
+	case anyValueNot(up, 1):
+		findings = append(findings, finding("proxyd."+endpoint.Name+".up", "proxyd reports not up", report.SeverityFail, target, "proxyd_up is not 1 for every series", "Investigate proxyd process health and routing availability immediately.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(up), "role": endpoint.Role}))
+	default:
+		findings = append(findings, finding("proxyd."+endpoint.Name+".up", "proxyd reports up", report.SeverityOK, target, "proxyd_up=1", "No action needed.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(up), "role": endpoint.Role}))
+	}
+
+	findings = append(findings, checkProxydBackendHealthMetrics(endpoint, samples)...)
+	findings = append(findings, checkProxydConsensusMetrics(endpoint, samples)...)
+	findings = append(findings, checkProxydErrorMetrics(endpoint, samples)...)
+	findings = append(findings, checkProxydLatencyMetrics(endpoint, samples, thresholds)...)
+	return findings
+}
+
+func checkProxydBackendHealthMetrics(endpoint config.ProxydEndpointConfig, samples []metrics.Sample) []report.Finding {
+	target := proxydTarget(endpoint) + ".metrics"
+	var findings []report.Finding
+
+	probeHealthy := metrics.Find(samples, "proxyd_backend_probe_healthy")
+	if len(probeHealthy) == 0 {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".backend_probe_healthy_missing", "proxyd backend probe health metric is missing", report.SeverityWarn, target, "proxyd_backend_probe_healthy was not present", "Enable backend probe metrics where proxyd health checks are configured; they show whether each backend probe is currently healthy.", []string{DocProxyd, DocMetrics}, nil))
+	} else if bad := samplesByBackendValue(probeHealthy, endpoint.ExpectedBackends, func(v float64) bool { return math.Abs(v-1) > 0.000001 }); len(bad) > 0 {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".backend_probe_healthy", "proxyd backend probes report unhealthy backends", report.SeverityWarn, target, "one or more backend probe health series is not 1", "Investigate backend probe targets, source/light-node health, and proxyd backend removal behavior.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(bad), "role": endpoint.Role}))
+	} else {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".backend_probe_healthy", "proxyd backend probes are healthy", report.SeverityOK, target, "backend probe health is 1", "No action needed.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(filterBackendSamples(probeHealthy, endpoint.ExpectedBackends)), "role": endpoint.Role}))
+	}
+
+	for _, spec := range []struct {
+		name           string
+		id             string
+		titleWarn      string
+		titleOK        string
+		recommendation string
+	}{
+		{"proxyd_backend_degraded", "backend_degraded", "proxyd reports degraded backends", "proxyd reports no degraded backends", "Investigate backend latency, error rate, peer count, sync state, and latest-block lag."},
+		{"proxyd_consensus_backend_banned", "backend_banned", "proxyd reports banned consensus backends", "proxyd reports no banned consensus backends", "Inspect consensus-aware routing state, backend divergence, latency, error rates, and ban thresholds."},
+	} {
+		series := metrics.Find(samples, spec.name)
+		if len(series) == 0 {
+			findings = append(findings, finding("proxyd."+endpoint.Name+"."+spec.id+"_missing", spec.name+" is missing", report.SeverityInfo, target, spec.name+" was not present", "This can be normal for older proxyd versions or non-consensus-aware endpoints; verify manually if this endpoint is production critical.", []string{DocProxyd, DocMetrics}, nil))
+			continue
+		}
+		bad := samplesByBackendValue(series, endpoint.ExpectedBackends, func(v float64) bool { return v > 0 })
+		if len(bad) > 0 {
+			findings = append(findings, finding("proxyd."+endpoint.Name+"."+spec.id, spec.titleWarn, report.SeverityWarn, target, "one or more backend health gauge series is nonzero", spec.recommendation, []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(bad), "role": endpoint.Role}))
+		} else {
+			findings = append(findings, finding("proxyd."+endpoint.Name+"."+spec.id, spec.titleOK, report.SeverityOK, target, "all observed backend health gauges are zero", "No action needed.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(filterBackendSamples(series, endpoint.ExpectedBackends)), "role": endpoint.Role}))
+		}
+	}
+
+	inSync := metrics.Find(samples, "proxyd_consensus_backend_in_sync")
+	if len(inSync) > 0 {
+		bad := samplesByBackendValue(inSync, endpoint.ExpectedBackends, func(v float64) bool { return math.Abs(v-1) > 0.000001 })
+		if len(bad) > 0 {
+			findings = append(findings, finding("proxyd."+endpoint.Name+".backend_in_sync", "proxyd reports consensus backends out of sync", report.SeverityWarn, target, "one or more proxyd_consensus_backend_in_sync series is not 1", "Investigate backend sync state before depending on this consensus-aware routing endpoint.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(bad), "role": endpoint.Role}))
+		} else {
+			findings = append(findings, finding("proxyd."+endpoint.Name+".backend_in_sync", "proxyd reports consensus backends in sync", report.SeverityOK, target, "observed consensus backend in-sync gauges are 1", "No action needed.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(filterBackendSamples(inSync, endpoint.ExpectedBackends)), "role": endpoint.Role}))
+		}
+	}
+
+	peerCount := metrics.Find(samples, "proxyd_consensus_backend_peer_count")
+	if endpoint.ConsensusAware && len(peerCount) == 0 {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".backend_peer_count_missing", "proxyd consensus peer count metric is missing", report.SeverityInfo, target, "proxyd_consensus_backend_peer_count was not present", "Consensus-aware proxyd can use backend peer count as a health input; confirm metric availability for production dashboards.", []string{DocProxyd, DocMetrics}, nil))
+	} else if len(peerCount) > 0 {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".backend_peer_count", "proxyd consensus peer count metric present", report.SeverityOK, target, "proxyd_consensus_backend_peer_count was present", "Use this metric to correlate backend health decisions with P2P state.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(filterBackendSamples(peerCount, endpoint.ExpectedBackends)), "role": endpoint.Role}))
+	}
+	return findings
+}
+
+func checkProxydConsensusMetrics(endpoint config.ProxydEndpointConfig, samples []metrics.Sample) []report.Finding {
+	target := proxydTarget(endpoint) + ".metrics"
+	var findings []report.Finding
+	latest, latestOK := maxMetricValue(samples, "proxyd_group_consensus_latest_block")
+	safe, safeOK := maxMetricValue(samples, "proxyd_group_consensus_safe_block")
+	finalized, finalizedOK := maxMetricValue(samples, "proxyd_group_consensus_finalized_block")
+
+	if endpoint.ConsensusAware && (!latestOK || !safeOK || !finalizedOK) {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".consensus_blocks", "proxyd consensus block metrics are incomplete", report.SeverityWarn, target, "latest, safe, or finalized consensus block metric was missing", "Expose proxyd group consensus block gauges to prove consensus-aware routing is tracking latest, safe, and finalized heads.", []string{DocProxyd, DocMetrics}, map[string]string{"latest_present": fmt.Sprintf("%t", latestOK), "safe_present": fmt.Sprintf("%t", safeOK), "finalized_present": fmt.Sprintf("%t", finalizedOK), "role": endpoint.Role}))
+	} else if latestOK && safeOK && finalizedOK {
+		evidence := map[string]string{"latest": fmt.Sprintf("%.0f", latest), "safe": fmt.Sprintf("%.0f", safe), "finalized": fmt.Sprintf("%.0f", finalized), "role": endpoint.Role}
+		if latest < safe || safe < finalized {
+			findings = append(findings, finding("proxyd."+endpoint.Name+".consensus_blocks", "proxyd consensus block ordering looks invalid", report.SeverityWarn, target, "expected latest >= safe >= finalized", "Investigate consensus tracker state and backend consistency.", []string{DocProxyd, DocMetrics}, evidence))
+		} else {
+			findings = append(findings, finding("proxyd."+endpoint.Name+".consensus_blocks", "proxyd consensus block metrics are present", report.SeverityOK, target, "latest, safe, and finalized consensus gauges are parseable", "Use these metrics to alert on stale or divergent consensus-aware routing.", []string{DocProxyd, DocMetrics}, evidence))
+		}
+	}
+
+	count, countOK := maxMetricValue(samples, "proxyd_group_consensus_count")
+	total, totalOK := maxMetricValue(samples, "proxyd_group_consensus_total_count")
+	if endpoint.ConsensusAware && !countOK {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".consensus_count_missing", "proxyd consensus group count metric is missing", report.SeverityWarn, target, "proxyd_group_consensus_count was not present", "Expose consensus group count so dashboards can detect zero serving consensus candidates.", []string{DocProxyd, DocMetrics}, nil))
+	} else if countOK && count <= 0 {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".consensus_count", "proxyd has no serving consensus backends", report.SeverityWarn, target, "proxyd_group_consensus_count <= 0", "Investigate backend bans, probe health, sync state, and consensus-group filtering.", []string{DocProxyd, DocMetrics}, map[string]string{"consensus_count": fmt.Sprintf("%.0f", count), "role": endpoint.Role}))
+	} else if countOK {
+		evidence := map[string]string{"consensus_count": fmt.Sprintf("%.0f", count), "role": endpoint.Role}
+		if totalOK {
+			evidence["consensus_total_count"] = fmt.Sprintf("%.0f", total)
+		}
+		findings = append(findings, finding("proxyd."+endpoint.Name+".consensus_count", "proxyd has serving consensus backends", report.SeverityOK, target, fmt.Sprintf("consensus_count=%.0f", count), "No action needed.", []string{DocProxyd, DocMetrics}, evidence))
+	}
+
+	clLocalSafe := metrics.Find(samples, "proxyd_consensus_cl_group_local_safe_block")
+	if endpoint.Role == "deriver" && endpoint.ConsensusAware && len(clLocalSafe) == 0 {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".cl_local_safe_missing", "proxyd CL local-safe consensus metric is missing", report.SeverityInfo, target, "proxyd_consensus_cl_group_local_safe_block was not present", "For op-node/source routing, use CL-specific proxyd metrics when available to track local-safe L2 consensus.", []string{DocProxyd, DocMetrics}, nil))
+	} else if len(clLocalSafe) > 0 {
+		max, _ := metrics.MaxValue(clLocalSafe)
+		findings = append(findings, finding("proxyd."+endpoint.Name+".cl_local_safe", "proxyd CL local-safe consensus metric present", report.SeverityOK, target, fmt.Sprintf("max local-safe %.0f", max), "Use this metric for op-node source-tier routing dashboards.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(clLocalSafe), "role": endpoint.Role}))
+	}
+	return findings
+}
+
+func checkProxydErrorMetrics(endpoint config.ProxydEndpointConfig, samples []metrics.Sample) []report.Finding {
+	target := proxydTarget(endpoint) + ".metrics"
+	var findings []report.Finding
+	for _, spec := range []struct {
+		names          []string
+		id             string
+		titleWarn      string
+		titleOK        string
+		recommendation string
+	}{
+		{[]string{"proxyd_rpc_errors_total", "proxyd_rpc_special_errors_total", "proxyd_unserviceable_requests_total", "proxyd_too_many_request_errors_total", "proxyd_redis_errors_total", "proxyd_group_consensus_ha_error"}, "error_counters", "proxyd error counters are nonzero", "proxyd error counters are zero", "Review rates over a recent window; lifetime counters can remain nonzero after old incidents."},
+		{[]string{"proxyd_consensus_cl_ban_not_healthy_total", "proxyd_consensus_cl_ban_unexpected_block_tags_total", "proxyd_consensus_cl_ban_interop_safe_gt_local_safe_total", "proxyd_consensus_cl_ban_output_root_mismatch_total", "proxyd_consensus_cl_ban_output_root_timeout_total", "proxyd_consensus_cl_output_root_disagreement_total", "proxyd_consensus_cl_no_pin_candidate_total"}, "cl_consensus_counters", "proxyd CL consensus counters are nonzero", "proxyd CL consensus counters are zero", "Investigate source-tier op-node health, output-root agreement, local-safe behavior, and pin-candidate selection."},
+	} {
+		series := findAnyMetric(samples, spec.names...)
+		if len(series) == 0 {
+			findings = append(findings, finding("proxyd."+endpoint.Name+"."+spec.id+"_missing", "proxyd "+spec.id+" metrics are missing", report.SeverityInfo, target, "none of "+strings.Join(spec.names, ", ")+" were present", "This may be normal depending on proxyd version and enabled features; confirm dashboards cover request errors and consensus bans where applicable.", []string{DocProxyd, DocMetrics}, nil))
+			continue
+		}
+		max, _ := metrics.MaxValue(series)
+		if max > 0 {
+			findings = append(findings, finding("proxyd."+endpoint.Name+"."+spec.id, spec.titleWarn, report.SeverityWarn, target, fmt.Sprintf("max observed counter %.0f", max), spec.recommendation, []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(series), "role": endpoint.Role}))
+		} else {
+			findings = append(findings, finding("proxyd."+endpoint.Name+"."+spec.id, spec.titleOK, report.SeverityOK, target, "observed counters are zero", "No action needed.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(series), "role": endpoint.Role}))
+		}
+	}
+
+	httpErrors := httpErrorSamples(samples)
+	if len(httpErrors) > 0 {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".http_error_codes", "proxyd HTTP/backend error codes are nonzero", report.SeverityWarn, target, "5xx or 429 response-code counters were observed", "Review rate increases for backend/server errors and throttling; lifetime counters can remain nonzero after old incidents.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(httpErrors), "role": endpoint.Role}))
+	}
+
+	errorRate := metrics.Find(samples, "proxyd_backend_error_rate")
+	if len(errorRate) == 0 {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".backend_error_rate_missing", "proxyd backend error-rate metric is missing", report.SeverityInfo, target, "proxyd_backend_error_rate was not present", "This can be normal for older proxyd versions; where available, scrape backend error rate to identify degraded backends before they affect routing.", []string{DocProxyd, DocMetrics}, nil))
+	} else if bad := samplesByBackendValue(errorRate, endpoint.ExpectedBackends, func(v float64) bool { return v > 0 }); len(bad) > 0 {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".backend_error_rate", "proxyd backend error rate is nonzero", report.SeverityWarn, target, "one or more backend error-rate gauges is nonzero", "Identify the affected backend and method, then check backend logs, request latency, and upstream RPC health.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(bad), "role": endpoint.Role}))
+	} else {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".backend_error_rate", "proxyd backend error rate is zero", report.SeverityOK, target, "observed backend error-rate gauges are zero", "No action needed.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(filterBackendSamples(errorRate, endpoint.ExpectedBackends)), "role": endpoint.Role}))
+	}
+	return findings
+}
+
+func checkProxydLatencyMetrics(endpoint config.ProxydEndpointConfig, samples []metrics.Sample, thresholds config.ThresholdsConfig) []report.Finding {
+	target := proxydTarget(endpoint) + ".metrics"
+	series := metrics.FindPrefix(samples, "proxyd_rpc_backend_request_duration_seconds")
+	if len(series) == 0 {
+		return []report.Finding{finding("proxyd."+endpoint.Name+".backend_latency_missing", "proxyd backend request latency metric is missing", report.SeverityWarn, target, "proxyd_rpc_backend_request_duration_seconds was not present", "Expose backend request duration metrics so operators can detect slow backends and correlate consensus bans with latency.", []string{DocProxyd, DocMetrics}, nil)}
+	}
+	quantiles := quantileSamples(series)
+	max, ok := metrics.MaxValue(quantiles)
+	if thresholds.MaxRPCLatencySeconds == 0 {
+		thresholds.MaxRPCLatencySeconds = 2
+	}
+	if ok && max > thresholds.MaxRPCLatencySeconds {
+		return []report.Finding{finding("proxyd."+endpoint.Name+".backend_latency", "proxyd backend request latency is high", report.SeverityWarn, target, fmt.Sprintf("max observed backend latency quantile %.3fs", max), "Investigate slow backend nodes, network latency, and proxyd backend timeout settings.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(quantiles), "threshold_seconds": fmt.Sprintf("%.3f", thresholds.MaxRPCLatencySeconds), "role": endpoint.Role})}
+	}
+	return []report.Finding{finding("proxyd."+endpoint.Name+".backend_latency", "proxyd backend request latency metric present", report.SeverityOK, target, "backend request duration series are present", "Alert on recent latency quantiles using deployment-specific SLOs.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(limitSamples(series, 8)), "role": endpoint.Role})}
+}
+
+func maxMetricValue(samples []metrics.Sample, name string) (float64, bool) {
+	return metrics.MaxValue(metrics.Find(samples, name))
+}
+
+func findAnyMetric(samples []metrics.Sample, names ...string) []metrics.Sample {
+	var out []metrics.Sample
+	for _, name := range names {
+		out = append(out, metrics.Find(samples, name)...)
+	}
+	return out
+}
+
+func samplesByBackendValue(samples []metrics.Sample, expectedBackends []string, match func(float64) bool) []metrics.Sample {
+	candidates := filterBackendSamples(samples, expectedBackends)
+	out := make([]metrics.Sample, 0, len(candidates))
+	for _, sample := range candidates {
+		if match(sample.Value) {
+			out = append(out, sample)
+		}
+	}
+	return out
+}
+
+func filterBackendSamples(samples []metrics.Sample, expectedBackends []string) []metrics.Sample {
+	if len(expectedBackends) == 0 {
+		return samples
+	}
+	expected := map[string]struct{}{}
+	for _, backend := range expectedBackends {
+		expected[backend] = struct{}{}
+	}
+	out := make([]metrics.Sample, 0, len(samples))
+	for _, sample := range samples {
+		if _, ok := expected[backendLabel(sample)]; ok {
+			out = append(out, sample)
+		}
+	}
+	if len(out) == 0 {
+		return samples
+	}
+	return out
+}
+
+func backendLabel(sample metrics.Sample) string {
+	return metrics.LabelValue(sample, "backend_name", "backend")
+}
+
+func httpErrorSamples(samples []metrics.Sample) []metrics.Sample {
+	var out []metrics.Sample
+	for _, sample := range findAnyMetric(samples, "proxyd_http_response_codes_total", "proxyd_rpc_backend_http_response_codes_total") {
+		statusCode := metrics.LabelValue(sample, "status_code", "code")
+		if sample.Value <= 0 {
+			continue
+		}
+		if strings.HasPrefix(statusCode, "5") || statusCode == "429" {
+			out = append(out, sample)
+		}
+	}
+	return out
+}
+
+func quantileSamples(samples []metrics.Sample) []metrics.Sample {
+	out := make([]metrics.Sample, 0, len(samples))
+	for _, sample := range samples {
+		if metrics.LabelValue(sample, "quantile") != "" {
+			out = append(out, sample)
+		}
+	}
+	return out
+}
+
+func limitSamples(samples []metrics.Sample, n int) []metrics.Sample {
+	if len(samples) <= n {
+		return samples
+	}
+	return samples[:n]
 }
 
 func (r Runner) checkProxydBackends(ctx context.Context, cfg config.Config, endpoint config.ProxydEndpointConfig, nodes map[string]config.OPNodeConfig, probe proxydEndpointProbe) []report.Finding {

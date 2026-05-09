@@ -28,7 +28,7 @@ Official references:
 - Conservative client-family heuristics for op-geth and op-reth/reth.
 - op-node Prometheus metrics, including `op_node_default_up`, refs, peer counts, derivation errors, pipeline resets, and RPC client latency metric presence.
 - Light/sequencer follower lag against configured source nodes using available RPC and parseable safe-head metrics.
-- proxyd/routing readiness for declared deriver and edge endpoints: consensus-aware intent, RPC/metrics reachability, expected backend roles, and head lag against readable backends.
+- proxyd/routing readiness for declared deriver and edge endpoints: consensus-aware intent, RPC/metrics reachability, expected backend roles, head lag against readable backends, and native proxyd health metrics such as `proxyd_up`, backend probes, consensus counts, degraded/banned backends, backend error rate, CL consensus counters, and backend latency.
 - Basic interop dependency RPC, chain ID, block-number, and metrics reachability.
 - Prometheus alert-rule and Markdown runbook generation.
 
@@ -38,6 +38,7 @@ Official references:
 - op-supervisor-specific behavior or metrics.
 - Actual deployed CLI flags unless represented in the config.
 - Private proxyd TOML introspection or proof that a live proxyd process is using every declared backend.
+- Every proxyd metric variant across every deployed version; missing version-specific proxyd metrics are reported conservatively.
 - Exhaustive RPC equivalence between op-geth and op-reth; current RPC comparison is sampled and read-only.
 - Grafana dashboard generation.
 
@@ -46,7 +47,7 @@ Official references:
 Download a release archive and verify its checksum:
 
 ```sh
-VERSION=0.1.1
+VERSION=0.1.2
 OS=linux
 ARCH=amd64
 curl -L -O "https://github.com/CruzMolina/opstack-doctor/releases/download/v${VERSION}/opstack-doctor_${VERSION}_${OS}_${ARCH}.tar.gz"
@@ -66,8 +67,8 @@ go build ./cmd/opstack-doctor
 Container images are published for tagged releases:
 
 ```sh
-docker run --rm ghcr.io/cruzmolina/opstack-doctor:v0.1.1 version
-docker run --rm -v "$PWD/examples/doctor.example.yaml:/config/doctor.yaml:ro" ghcr.io/cruzmolina/opstack-doctor:v0.1.1 check --config /config/doctor.yaml
+docker run --rm ghcr.io/cruzmolina/opstack-doctor:v0.1.2 version
+docker run --rm -v "$PWD/examples/doctor.example.yaml:/config/doctor.yaml:ro" ghcr.io/cruzmolina/opstack-doctor:v0.1.2 check --config /config/doctor.yaml
 ```
 
 The main command is:
@@ -176,7 +177,7 @@ Apache-2.0. See [LICENSE](LICENSE).
 
 - Deeper op-reth/op-geth RPC comparison.
 - op-supervisor and interop-specific metrics.
-- proxyd-native metric coverage once stable metric names are documented.
+- proxyd metric version matrix and richer consensus-aware routing diagnostics.
 - Grafana dashboard generation.
 - Dependency-set config discovery.
 - Upstreaming useful checks into Optimism docs/tooling.
