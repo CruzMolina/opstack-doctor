@@ -1,0 +1,38 @@
+chain:
+  name: op-mainnet
+  chain_id: 10
+
+execution:
+  reference_rpc: "http://op-geth.example.invalid"
+  candidate_rpc: "http://op-reth.example.invalid"
+  compare_blocks: 16
+  max_head_lag_blocks: 4
+
+op_nodes:
+  - name: source-1
+    role: source
+    rpc: "http://source-1.example.invalid"
+    metrics: "http://source-1.example.invalid:7300/metrics"
+  - name: light-1
+    role: light
+    rpc: "http://light-1.example.invalid"
+    metrics: "http://light-1.example.invalid:7300/metrics"
+    follows: source-1
+  - name: sequencer-1
+    role: sequencer
+    rpc: "http://sequencer-1.example.invalid"
+    metrics: "http://sequencer-1.example.invalid:7300/metrics"
+    follows: source-1
+
+interop:
+  enabled: true
+  dependencies:
+    - name: base
+      chain_id: 8453
+      rpc: "http://base.example.invalid"
+      metrics: "http://base.example.invalid:7300/metrics"
+
+thresholds:
+  max_safe_lag_blocks: 20
+  min_peer_count: 1
+  max_rpc_latency_seconds: 2.0

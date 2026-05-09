@@ -1,0 +1,69 @@
+groups:
+  - name: opstack-doctor.rules
+    rules:
+      - alert: OpNodeDown
+        expr: op_node_default_up != 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: op-node is down
+          description: op_node_default_up is not 1. Check process health, metrics scrape target, and host networking.
+      - alert: L2SafeHeadNotAdvancing
+        expr: increase(op_node_default_refs_number{ref=~".*safe.*|.*Safe.*",layer=~".*l2.*|.*L2.*"}[10m]) <= 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: L2 safe head is not advancing
+          description: Safe-head refs are not increasing. Adapt selectors to your actual op-node metric labels.
+      - alert: OpNodeLowPeerCount
+        expr: (op_node_default_peer_count < 1) or (op_node_default_p2p_peer_count < 1)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: op-node peer count is low
+          description: P2P peer count is below the configured threshold.
+      - alert: OpNodeDerivationErrors
+        expr: increase(op_node_default_derivation_errors_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: op-node derivation errors observed
+          description: Check L1 RPC health, derivation pipeline logs, and rollup config consistency.
+      - alert: OpNodePipelineResets
+        expr: increase(op_node_default_pipeline_resets_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: op-node pipeline resets observed
+          description: Check derivation errors, L1 RPC reliability, and source-node stability.
+      - alert: SourceOpNodeDown
+        expr: op_node_default_up{node=~"source-1"} != 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: source op-node is down
+          description: The source tier is a hard dependency for light and sequencer nodes.
+      - alert: LightNodeLaggingSource
+        expr: op_node_default_refs_number{node="source-1",ref=~".*safe.*|.*Safe.*"} - op_node_default_refs_number{node="light-1",ref=~".*safe.*|.*Safe.*"} > 20
+        for: 5m
+        labels:
+          severity: warning
+          node: light-1
+          source: source-1
+        annotations:
+          summary: light/sequencer node is lagging its source
+          description: Template alert. Assumes Prometheus scrape labels include node and safe-ref labels.
+      - alert: ExecutionCandidateLaggingReference
+        expr: opstack_doctor_execution_candidate_lag_blocks{chain="op-mainnet"} > 4
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: execution candidate is lagging reference
+          description: Template alert for lag exported from a scheduled opstack-doctor run or recording rule.
