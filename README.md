@@ -10,10 +10,13 @@ Optimism has announced that op-geth and op-program are supported through May 31,
 
 OP Labs also recommends a specialized op-node fleet: a small redundant source tier performs L1 derivation, and light or sequencer nodes follow sources via `--l2.follow.source=<source op-node RPC>`. For interop, nodes need a way to follow every chain in their dependency set, so basic reachability and observability need to be in place before deeper validation is meaningful.
 
+For production routing, proxyd can provide backend routing, retries, consensus tracking, response rewriting, load balancing, caching, and metrics. `opstack-doctor` checks declared proxyd endpoints from the outside; it does not read private proxyd TOML.
+
 Official references:
 
 - [End of Support for op-geth and op-program](https://docs.optimism.io/notices/op-geth-deprecation)
 - [Light Nodes: Specialize Your Op-Node Fleet](https://www.optimism.io/blog/light-nodes-specialize-your-op-node-fleet)
+- [proxyd](https://docs.optimism.io/operators/chain-operators/tools/proxyd)
 - [OP Stack interoperability explainer](https://docs.optimism.io/op-stack/interop/explainer)
 - [Node metrics and monitoring](https://docs.optimism.io/node-operators/guides/monitoring/metrics)
 
@@ -25,6 +28,7 @@ Official references:
 - Conservative client-family heuristics for op-geth and op-reth/reth.
 - op-node Prometheus metrics, including `op_node_default_up`, refs, peer counts, derivation errors, pipeline resets, and RPC client latency metric presence.
 - Light/sequencer follower lag against configured source nodes using available RPC and parseable safe-head metrics.
+- proxyd/routing readiness for declared deriver and edge endpoints: consensus-aware intent, RPC/metrics reachability, expected backend roles, and head lag against readable backends.
 - Basic interop dependency RPC, chain ID, block-number, and metrics reachability.
 - Prometheus alert-rule and Markdown runbook generation.
 
@@ -33,26 +37,24 @@ Official references:
 - Full interop protocol correctness or cross-chain message validation.
 - op-supervisor-specific behavior or metrics.
 - Actual deployed CLI flags unless represented in the config.
-- proxyd consensus-aware routing behavior.
+- Private proxyd TOML introspection or proof that a live proxyd process is using every declared backend.
 - Exhaustive RPC equivalence between op-geth and op-reth; current RPC comparison is sampled and read-only.
-- Grafana dashboard generation or container packaging.
+- Grafana dashboard generation.
 
 ## Install And Run
 
 Download a release archive and verify its checksum:
 
 ```sh
-VERSION=0.1.0
+VERSION=0.1.1
 OS=linux
 ARCH=amd64
-curl -L -O "https://github.com/OWNER/REPO/releases/download/v${VERSION}/opstack-doctor_${VERSION}_${OS}_${ARCH}.tar.gz"
-curl -L -O "https://github.com/OWNER/REPO/releases/download/v${VERSION}/SHA256SUMS"
+curl -L -O "https://github.com/CruzMolina/opstack-doctor/releases/download/v${VERSION}/opstack-doctor_${VERSION}_${OS}_${ARCH}.tar.gz"
+curl -L -O "https://github.com/CruzMolina/opstack-doctor/releases/download/v${VERSION}/SHA256SUMS"
 sha256sum -c SHA256SUMS --ignore-missing
 tar -xzf "opstack-doctor_${VERSION}_${OS}_${ARCH}.tar.gz"
 ./opstack-doctor version
 ```
-
-Replace `OWNER/REPO` with the published repository path.
 
 Or build from source:
 
@@ -64,11 +66,9 @@ go build ./cmd/opstack-doctor
 Container images are published for tagged releases:
 
 ```sh
-docker run --rm ghcr.io/OWNER/REPO:v0.1.0 version
-docker run --rm -v "$PWD/examples/doctor.example.yaml:/config/doctor.yaml:ro" ghcr.io/OWNER/REPO:v0.1.0 check --config /config/doctor.yaml
+docker run --rm ghcr.io/cruzmolina/opstack-doctor:v0.1.1 version
+docker run --rm -v "$PWD/examples/doctor.example.yaml:/config/doctor.yaml:ro" ghcr.io/cruzmolina/opstack-doctor:v0.1.1 check --config /config/doctor.yaml
 ```
-
-Replace `OWNER/REPO` with the published repository path.
 
 The main command is:
 
@@ -107,6 +107,7 @@ This is equivalent to `check --output prometheus`. It emits generic finding gaug
 - `opstack_doctor_execution_block_compare_match`
 - `opstack_doctor_execution_rpc_surface_match`
 - `opstack_doctor_topology_follower_lag_blocks`
+- `opstack_doctor_proxyd_head_lag_blocks`
 
 Run this from a cron job, Kubernetes `CronJob`, or sidecar-style wrapper and expose the output through your normal textfile/scrape path.
 
@@ -132,9 +133,9 @@ opstack-doctor demo --scenario fail --output prometheus
 
 The demo command starts temporary localhost RPC and metrics servers, runs the normal check engine, prints the selected output, and then shuts the servers down. Scenarios are:
 
-- `healthy`: redundant source tier, op-reth candidate, matching execution blocks, healthy metrics.
-- `warn`: op-geth reference, one source node, low peer count, derivation errors, follower lag.
-- `fail`: op-geth candidate, execution lag/divergence, and an op-node reporting down.
+- `healthy`: redundant source tier, consensus-aware deriver proxyd, op-reth candidate, matching execution blocks, healthy metrics.
+- `warn`: op-geth reference, one source node, non-consensus-aware deriver proxyd, low peer count, derivation errors, follower lag.
+- `fail`: op-geth candidate, execution lag/divergence, unreachable proxyd routing, and an op-node reporting down.
 
 ## Generate Alerts And Runbooks
 
@@ -175,7 +176,7 @@ Apache-2.0. See [LICENSE](LICENSE).
 
 - Deeper op-reth/op-geth RPC comparison.
 - op-supervisor and interop-specific metrics.
-- proxyd topology checks.
+- proxyd-native metric coverage once stable metric names are documented.
 - Grafana dashboard generation.
 - Dependency-set config discovery.
 - Upstreaming useful checks into Optimism docs/tooling.

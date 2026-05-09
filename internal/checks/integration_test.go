@@ -21,15 +21,23 @@ func TestRunnerWithMockedEndpoints(t *testing.T) {
 	defer candRPC.Close()
 	sourceRPC := newRPCServer(t, "op-node/source", 10, 100)
 	defer sourceRPC.Close()
+	source2RPC := newRPCServer(t, "op-node/source-2", 10, 100)
+	defer source2RPC.Close()
 	lightRPC := newRPCServer(t, "op-node/light", 10, 98)
 	defer lightRPC.Close()
+	proxydRPC := newRPCServer(t, "proxyd/deriver", 10, 100)
+	defer proxydRPC.Close()
 	depRPC := newRPCServer(t, "reth/base", 8453, 200)
 	defer depRPC.Close()
 
 	sourceMetrics := newMetricsServer(t, 100)
 	defer sourceMetrics.Close()
+	source2Metrics := newMetricsServer(t, 100)
+	defer source2Metrics.Close()
 	lightMetrics := newMetricsServer(t, 98)
 	defer lightMetrics.Close()
+	proxydMetrics := newProxydMetricsServer(t)
+	defer proxydMetrics.Close()
 	depMetrics := newMetricsServer(t, 200)
 	defer depMetrics.Close()
 
@@ -43,7 +51,14 @@ func TestRunnerWithMockedEndpoints(t *testing.T) {
 		},
 		OPNodes: []config.OPNodeConfig{
 			{Name: "source-1", Role: "source", RPC: sourceRPC.URL, Metrics: sourceMetrics.URL},
+			{Name: "source-2", Role: "source", RPC: source2RPC.URL, Metrics: source2Metrics.URL},
 			{Name: "light-1", Role: "light", RPC: lightRPC.URL, Metrics: lightMetrics.URL, Follows: "source-1"},
+		},
+		Proxyd: config.ProxydConfig{
+			Enabled: true,
+			Endpoints: []config.ProxydEndpointConfig{
+				{Name: "deriver-proxyd", Role: "deriver", RPC: proxydRPC.URL, Metrics: proxydMetrics.URL, ConsensusAware: true, ExpectedBackends: []string{"source-1", "source-2"}},
+			},
 		},
 		Interop: config.InteropConfig{
 			Enabled: true,
@@ -59,10 +74,52 @@ func TestRunnerWithMockedEndpoints(t *testing.T) {
 			t.Fatalf("unexpected fail finding: %+v", f)
 		}
 	}
-	for _, id := range []string{"execution.block_compare.match", "execution.rpc_surface.match", "topology.light-1.safe_head_metrics", "interop.scope"} {
+	for _, id := range []string{"execution.block_compare.match", "execution.rpc_surface.match", "topology.light-1.safe_head_metrics", "proxyd.deriver-proxyd.head_lag", "interop.scope"} {
 		if !hasFinding(findings, id) {
 			t.Fatalf("missing finding %s; got ids %s", id, findingIDs(findings))
 		}
+	}
+}
+
+func TestRunnerFlagsProxydRoutingRisks(t *testing.T) {
+	sourceRPC := newRPCServer(t, "op-node/source", 10, 100)
+	defer sourceRPC.Close()
+	proxydRPC := newRPCServer(t, "proxyd/deriver", 10, 70)
+	defer proxydRPC.Close()
+	refRPC := newRPCServer(t, "op-reth/ref", 10, 100)
+	defer refRPC.Close()
+	candRPC := newRPCServer(t, "op-reth/cand", 10, 100)
+	defer candRPC.Close()
+
+	cfg := config.Config{
+		Chain: config.ChainConfig{Name: "op-mainnet", ChainID: 10},
+		Execution: config.ExecutionConfig{
+			ReferenceRPC:     refRPC.URL,
+			CandidateRPC:     candRPC.URL,
+			CompareBlocks:    1,
+			MaxHeadLagBlocks: 4,
+		},
+		OPNodes: []config.OPNodeConfig{
+			{Name: "source-1", Role: "source", RPC: sourceRPC.URL},
+			{Name: "light-1", Role: "light", Follows: "source-1"},
+		},
+		Proxyd: config.ProxydConfig{
+			Enabled: true,
+			Endpoints: []config.ProxydEndpointConfig{
+				{Name: "deriver-proxyd", Role: "deriver", RPC: proxydRPC.URL, ConsensusAware: false, ExpectedBackends: []string{"source-1"}},
+			},
+		},
+		Thresholds: config.ThresholdsConfig{MaxSafeLagBlocks: 20, MinPeerCount: 1},
+	}
+	cfg.ApplyDefaults()
+	findings := Runner{Timeout: time.Second}.Run(context.Background(), cfg)
+	for _, id := range []string{"proxyd.deriver-proxyd.consensus_aware", "proxyd.deriver-proxyd.head_lag", "proxyd.deriver-proxyd.metrics"} {
+		if !hasFinding(findings, id) {
+			t.Fatalf("missing finding %s; got ids %s", id, findingIDs(findings))
+		}
+	}
+	if !hasWarnFinding(findings, "proxyd.deriver-proxyd.head_lag") {
+		t.Fatalf("expected proxyd head lag warning; got %+v", findings)
 	}
 }
 
@@ -144,9 +201,29 @@ op_node_default_rpc_client_request_duration_seconds_count{method="eth_getBlockBy
 	}))
 }
 
+func newProxydMetricsServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	body := `
+proxyd_rpc_requests_total{backend="source-1",method="eth_blockNumber"} 10
+proxyd_backend_up{backend="source-1"} 1
+`
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+}
+
 func hasFinding(findings []report.Finding, id string) bool {
 	for _, f := range findings {
 		if f.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func hasWarnFinding(findings []report.Finding, id string) bool {
+	for _, f := range findings {
+		if f.ID == id && f.Severity == report.SeverityWarn {
 			return true
 		}
 	}

@@ -11,6 +11,7 @@ Start from [examples/doctor.example.yaml](../examples/doctor.example.yaml).
 | `chain` | object | yes | Chain identity for the local OP Stack chain being checked. |
 | `execution` | object | yes | Reference and candidate execution RPC endpoints for migration checks. |
 | `op_nodes` | list | no | Configured op-node fleet members and intended topology roles. |
+| `proxyd` | object | no | Declared proxyd/routing endpoints and expected backend groups. |
 | `interop` | object | no | Basic dependency-set readiness checks. |
 | `thresholds` | object | no | Operator thresholds used by warning/failure checks. |
 
@@ -77,6 +78,41 @@ Validation behavior:
 - `light` and `sequencer` nodes should set `follows`.
 - If `follows` is set, it must point to a configured node with `role: source`.
 
+## `proxyd`
+
+`proxyd` describes intended RPC routing endpoints. `opstack-doctor` does not read private proxyd TOML and does not claim to verify live flags. It checks externally visible RPC/metrics endpoints and compares proxyd heads against the op-node backends named in config.
+
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `enabled` | boolean | no | `false` | Enables proxyd/routing topology checks. |
+| `endpoints` | list | when enabled | empty | Declared proxyd endpoints to check. |
+
+Each endpoint:
+
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `name` | string | yes when configured | none | Unique proxyd endpoint name used in findings and alert labels. |
+| `role` | string | yes when configured | none | One of `deriver`, `edge`, or `general`. |
+| `rpc` | URL string | no | empty | Read-only proxyd RPC URL used for chain ID and head checks. |
+| `metrics` | URL string | no | empty | proxyd Prometheus metrics endpoint. |
+| `consensus_aware` | boolean | no | `false` | Declared operator intent that this proxyd endpoint uses consensus-aware routing. |
+| `expected_backends` | list of strings | no | empty | op-node names this endpoint is expected to route to or front. |
+
+Role meaning:
+
+- `deriver`: proxyd endpoint that fronts source op-nodes for light/sequencer follow-source traffic. This should be `consensus_aware: true` and should declare redundant source-node backends.
+- `edge`: user-facing or production read endpoint that fronts light/sequencer nodes.
+- `general`: any other proxyd endpoint where basic RPC/metrics reachability is useful.
+
+Validation behavior:
+
+- Unknown proxyd roles are failures.
+- Duplicate proxyd endpoint names are failures.
+- `expected_backends` entries must point to configured `op_nodes`.
+- `deriver` backends must be `source` op-nodes.
+- A deriver proxyd with fewer than two expected source backends emits a warning.
+- A deriver proxyd without `consensus_aware: true` emits a warning.
+
 ## `interop`
 
 | Field | Type | Required | Default | Description |
@@ -93,7 +129,7 @@ Each dependency:
 | `rpc` | URL string | yes when interop enabled | none | Read-only dependency execution RPC endpoint. |
 | `metrics` | URL string | no | empty | Dependency metrics endpoint, if available. |
 
-Interop checks in v0.1.0 are basic readiness checks only. They verify dependency RPC reachability, chain ID, block-number readability, and metrics reachability when provided. They do not validate cross-chain messages, access lists, op-supervisor behavior, or full protocol correctness.
+Interop checks are basic readiness checks only. They verify dependency RPC reachability, chain ID, block-number readability, and metrics reachability when provided. They do not validate cross-chain messages, access lists, op-supervisor behavior, or full protocol correctness.
 
 ## `thresholds`
 

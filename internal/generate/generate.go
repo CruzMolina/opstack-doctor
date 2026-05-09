@@ -94,6 +94,36 @@ func Alerts(cfg config.Config) ([]byte, error) {
 			},
 		},
 		{
+			Alert:  "ProxydEndpointUnhealthy",
+			Expr:   "opstack_doctor_finding{id=~\"proxyd\\\\..*\\\\.(rpc|head|chain_id)\",severity=\"fail\"} == 1",
+			For:    "2m",
+			Labels: map[string]string{"severity": "critical"},
+			Annotations: map[string]string{
+				"summary":     "proxyd endpoint failed doctor readiness checks",
+				"description": "opstack-doctor could not read the configured proxyd RPC endpoint or observed a chain/head failure. Requires scheduled doctor export metrics.",
+			},
+		},
+		{
+			Alert:  "DeriverProxydNotConsensusAware",
+			Expr:   "opstack_doctor_finding{id=~\"proxyd\\\\..*\\\\.consensus_aware\",severity=\"warn\"} == 1",
+			For:    "15m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "deriver-tier proxyd is not declared consensus-aware",
+				"description": "The OP Labs source/light-node topology recommends consensus-aware proxyd in production. This alert reflects opstack-doctor config intent, not live TOML introspection.",
+			},
+		},
+		{
+			Alert:  "ProxydMetricsUnavailable",
+			Expr:   "opstack_doctor_finding{id=~\"proxyd\\\\..*\\\\.metrics\",severity=\"warn\"} == 1",
+			For:    "10m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "proxyd metrics are unavailable",
+				"description": "The configured proxyd metrics endpoint is missing or unreachable. Check proxyd Prometheus listener and scrape config.",
+			},
+		},
+		{
 			Alert:  "ExecutionCandidateLaggingReference",
 			Expr:   fmt.Sprintf("opstack_doctor_execution_candidate_lag_blocks{chain=%q} > %d", cfg.Chain.Name, cfg.Execution.MaxHeadLagBlocks),
 			For:    "5m",
@@ -123,6 +153,26 @@ func Alerts(cfg config.Config) ([]byte, error) {
 				"description": "opstack-doctor observed mismatched or unavailable read-only RPC outputs during migration comparison.",
 			},
 		},
+	}
+	for _, endpoint := range cfg.Proxyd.Endpoints {
+		if endpoint.Name == "" {
+			continue
+		}
+		rules = append(rules, Rule{
+			Alert: "ProxydHeadLaggingBackends",
+			Expr: fmt.Sprintf(
+				"opstack_doctor_proxyd_head_lag_blocks{chain=%q,proxyd=%q} > %d",
+				cfg.Chain.Name,
+				endpoint.Name,
+				cfg.Thresholds.MaxSafeLagBlocks,
+			),
+			For:    "5m",
+			Labels: map[string]string{"severity": "warning", "proxyd": endpoint.Name},
+			Annotations: map[string]string{
+				"summary":     "proxyd RPC head is lagging declared backends",
+				"description": "opstack-doctor observed the proxyd endpoint behind the latest readable backend. Check proxyd backend health and routing strategy.",
+			},
+		})
 	}
 	for _, node := range cfg.OPNodes {
 		if node.Role != "light" && node.Role != "sequencer" {
@@ -181,6 +231,27 @@ func Runbook(cfg config.Config) []byte {
 	}
 	write("\n")
 
+	write("## proxyd / Routing Topology\n\n")
+	if !cfg.Proxyd.Enabled {
+		write("- proxyd checks are disabled in this config.\n")
+		write("- For production source/light-node topology, configure a deriver-tier proxyd endpoint with `consensus_aware: true` and redundant source-node backends.\n\n")
+	} else if len(cfg.Proxyd.Endpoints) == 0 {
+		write("- proxyd checks are enabled, but no endpoints are configured.\n\n")
+	} else {
+		write("- Confirm deriver-tier proxyd is consensus-aware and fronts redundant source nodes.\n")
+		write("- Confirm edge proxyd fronts light/sequencer nodes for read scaling where applicable.\n")
+		write("- Compare proxyd RPC heads with declared backend heads; alert when lag exceeds `%d` blocks.\n\n", cfg.Thresholds.MaxSafeLagBlocks)
+		write("Configured proxyd endpoints:\n\n")
+		for _, endpoint := range cfg.Proxyd.Endpoints {
+			backends := strings.Join(endpoint.ExpectedBackends, ", ")
+			if backends == "" {
+				backends = "(none)"
+			}
+			write("- `%s`: role=%s consensus_aware=%t expected_backends=%s\n", endpoint.Name, endpoint.Role, endpoint.ConsensusAware, backends)
+		}
+		write("\n")
+	}
+
 	write("## Interop Dependency Checklist\n\n")
 	if !cfg.Interop.Enabled {
 		write("- Interop checks are disabled in this config.\n\n")
@@ -208,6 +279,10 @@ func Runbook(cfg config.Config) []byte {
 	write("1. Confirm the process and host are alive.\n2. Check the metrics scrape target and op-node logs.\n3. For source nodes, verify dependent light/sequencer nodes have another healthy source to follow.\n\n")
 	write("### L2SafeHeadNotAdvancing / LightNodeLaggingSource\n\n")
 	write("1. Compare source and follower safe-head metrics.\n2. Check L1 RPC availability and derivation errors.\n3. Verify follow-source configuration and source-node RPC reachability.\n\n")
+	write("### ProxydEndpointUnhealthy / ProxydHeadLaggingBackends\n\n")
+	write("1. Compare proxyd `eth_blockNumber` with each declared backend.\n2. Check proxyd backend health, consensus-aware routing state, and backend group config.\n3. For deriver proxyd, verify at least two healthy source-node backends are available.\n\n")
+	write("### DeriverProxydNotConsensusAware / ProxydMetricsUnavailable\n\n")
+	write("1. Inspect proxyd deployment config and confirm consensus-aware routing is enabled where production deriver traffic depends on proxyd.\n2. Verify proxyd Prometheus listener, scrape labels, and dashboard coverage.\n3. Keep doctor config aligned with actual proxyd backend groups; this tool does not introspect private proxyd TOML.\n\n")
 	write("### OpNodeLowPeerCount\n\n")
 	write("1. Check P2P listen address, advertised address, firewall, and bootnodes.\n2. Confirm peer limits and discovery settings.\n3. Correlate with unsafe-head advancement and derivation health.\n\n")
 	write("### OpNodeDerivationErrors / OpNodePipelineResets\n\n")
@@ -216,7 +291,7 @@ func Runbook(cfg config.Config) []byte {
 	write("1. Compare `eth_blockNumber` on reference and candidate.\n2. Inspect candidate execution logs and disk/network saturation.\n3. Do not cut over until lag and block comparison findings are healthy.\n\n")
 
 	write("## Official References\n\n")
-	links := []string{checks.DocOPGethDeprecation, checks.DocLightNodes, checks.DocInterop, checks.DocMetrics}
+	links := []string{checks.DocOPGethDeprecation, checks.DocLightNodes, checks.DocInterop, checks.DocMetrics, checks.DocProxyd}
 	sort.Strings(links)
 	for _, link := range links {
 		write("- %s\n", link)
