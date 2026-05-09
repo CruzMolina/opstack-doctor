@@ -167,6 +167,10 @@ make docker-build
 make docker-smoke
 ```
 
+## License
+
+Apache-2.0. See [LICENSE](LICENSE).
+
 ## Roadmap
 
 - Deeper op-reth/op-geth RPC comparison.
