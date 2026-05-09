@@ -567,11 +567,23 @@ func refValue(samples []metrics.Sample, name string) (float64, bool) {
 
 func sampleLooksLikeRef(sample metrics.Sample, name string) bool {
 	for _, value := range sample.Labels {
-		if strings.Contains(strings.ToLower(value), name) {
+		if containsLabelToken(strings.ToLower(value), name) {
 			return true
 		}
 	}
 	return false
+}
+
+func containsLabelToken(value, token string) bool {
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'))
+	})
+	for _, part := range parts {
+		if part == token {
+			return true
+		}
+	}
+	return value == token
 }
 
 func formatSeries(samples []metrics.Sample) string {

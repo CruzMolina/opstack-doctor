@@ -100,7 +100,7 @@ func Alerts(cfg config.Config) ([]byte, error) {
 			Labels: map[string]string{"severity": "warning"},
 			Annotations: map[string]string{
 				"summary":     "execution candidate is lagging reference",
-				"description": "Template alert for lag exported from a scheduled opstack-doctor run or recording rule.",
+				"description": "Template alert for lag exported by opstack-doctor check --output prometheus or opstack-doctor export metrics.",
 			},
 		},
 	}

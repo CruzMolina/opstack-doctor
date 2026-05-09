@@ -66,4 +66,4 @@ groups:
           severity: warning
         annotations:
           summary: execution candidate is lagging reference
-          description: Template alert for lag exported from a scheduled opstack-doctor run or recording rule.
+          description: Template alert for lag exported by opstack-doctor check --output prometheus or opstack-doctor export metrics.

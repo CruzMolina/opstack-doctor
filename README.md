@@ -55,6 +55,7 @@ Output modes:
 ```sh
 opstack-doctor check --config doctor.yaml --output human
 opstack-doctor check --config doctor.yaml --output json
+opstack-doctor check --config doctor.yaml --output prometheus
 ```
 
 Exit-code policy:
@@ -66,11 +67,43 @@ opstack-doctor check --config doctor.yaml --fail-on warn
 
 By default, findings are printed and the command exits zero unless there is a config or IO error. `--fail-on fail` exits nonzero when any `fail` finding exists. `--fail-on warn` exits nonzero for either `warn` or `fail`.
 
+## Prometheus Export
+
+For scheduled diagnostics, emit scrapeable text metrics:
+
+```sh
+opstack-doctor export metrics --config doctor.yaml
+```
+
+This is equivalent to `check --output prometheus`. It emits generic finding gauges plus derived metrics such as:
+
+- `opstack_doctor_execution_candidate_lag_blocks`
+- `opstack_doctor_execution_block_compare_match`
+- `opstack_doctor_topology_follower_lag_blocks`
+
+Run this from a cron job, Kubernetes `CronJob`, or sidecar-style wrapper and expose the output through your normal textfile/scrape path.
+
 ## Configuration
 
 Start with [examples/doctor.example.yaml](examples/doctor.example.yaml). The config expresses intended topology; the tool validates behavior through read-only RPC and metrics checks.
 
 For local or mocked endpoints, point `reference_rpc`, `candidate_rpc`, op-node `rpc`, and `metrics` URLs at local `httptest`, anvil-style, or fixture servers that implement the small method set used by the MVP. Tests in this repository do this and never hit public RPC endpoints.
+
+## Local Demo
+
+Try realistic mocked output without any live infrastructure:
+
+```sh
+opstack-doctor demo --scenario healthy
+opstack-doctor demo --scenario warn --output json
+opstack-doctor demo --scenario fail --output prometheus
+```
+
+The demo command starts temporary localhost RPC and metrics servers, runs the normal check engine, prints the selected output, and then shuts the servers down. Scenarios are:
+
+- `healthy`: redundant source tier, op-reth candidate, matching execution blocks, healthy metrics.
+- `warn`: op-geth reference, one source node, low peer count, derivation errors, follower lag.
+- `fail`: op-geth candidate, execution lag/divergence, and an op-node reporting down.
 
 ## Generate Alerts And Runbooks
 
@@ -80,6 +113,8 @@ opstack-doctor generate runbook --config doctor.yaml --out runbook.md
 ```
 
 The generated alert rules are templates. They assume common metric names and scrape labels such as `node`, `role`, `ref`, and `layer`; adjust selectors to match your Prometheus labeling.
+
+The `ExecutionCandidateLaggingReference` alert assumes you run `opstack-doctor export metrics --config doctor.yaml` or `opstack-doctor check --output prometheus` on a schedule and scrape the emitted `opstack_doctor_execution_candidate_lag_blocks` gauge.
 
 ## Development
 
