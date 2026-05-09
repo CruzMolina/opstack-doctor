@@ -4,7 +4,19 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
-## 0.1.0 - Unreleased
+## 0.1.1 - Unreleased
+
+### Added
+
+- proxyd/routing topology readiness checks for declared deriver and edge RPC routing endpoints.
+
+### Changed
+
+- Add Apache-2.0 license to release-ready source.
+- Update GitHub Actions to current major versions with Node 24-compatible releases.
+- Add Dependabot coverage for Go modules, Docker, and GitHub Actions.
+
+## 0.1.0 - 2026-05-08
 
 Initial MVP for OP Stack / Superchain node and chain operators.
 

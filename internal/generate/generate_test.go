@@ -22,6 +22,12 @@ func TestAlertsYAMLParsesAndContainsExpectedRules(t *testing.T) {
 			{Name: "source-1", Role: "source"},
 			{Name: "light-1", Role: "light", Follows: "source-1"},
 		},
+		Proxyd: config.ProxydConfig{
+			Enabled: true,
+			Endpoints: []config.ProxydEndpointConfig{
+				{Name: "deriver-proxyd", Role: "deriver", ConsensusAware: true, ExpectedBackends: []string{"source-1"}},
+			},
+		},
 		Thresholds: config.ThresholdsConfig{MaxSafeLagBlocks: 20, MinPeerCount: 1},
 	}
 
@@ -44,6 +50,10 @@ func TestAlertsYAMLParsesAndContainsExpectedRules(t *testing.T) {
 		"OpNodeDerivationErrors",
 		"OpNodePipelineResets",
 		"SourceOpNodeDown",
+		"ProxydEndpointUnhealthy",
+		"DeriverProxydNotConsensusAware",
+		"ProxydMetricsUnavailable",
+		"ProxydHeadLaggingBackends",
 		"ExecutionCandidateLaggingReference",
 		"ExecutionBlockComparisonMismatch",
 		"ExecutionRPCSurfaceMismatch",
@@ -75,8 +85,10 @@ func TestExampleAlertYAMLParses(t *testing.T) {
 	if err := yaml.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("example alert YAML does not parse: %v", err)
 	}
-	if _, ok := findRule(parsed, "ExecutionRPCSurfaceMismatch"); !ok {
-		t.Fatal("example rules missing ExecutionRPCSurfaceMismatch")
+	for _, alert := range []string{"ExecutionRPCSurfaceMismatch", "ProxydHeadLaggingBackends"} {
+		if _, ok := findRule(parsed, alert); !ok {
+			t.Fatalf("example rules missing %s", alert)
+		}
 	}
 }
 

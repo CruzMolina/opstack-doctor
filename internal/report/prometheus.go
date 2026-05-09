@@ -192,6 +192,35 @@ func renderDerivedMetrics(w io.Writer, findings []Finding, opts PrometheusOption
 			return err
 		}
 	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+
+	if _, err := fmt.Fprintln(w, "# HELP opstack_doctor_proxyd_head_lag_blocks proxyd RPC head lag behind the latest readable declared backend."); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "# TYPE opstack_doctor_proxyd_head_lag_blocks gauge"); err != nil {
+		return err
+	}
+	for _, f := range findings {
+		if !strings.HasPrefix(f.ID, "proxyd.") || !strings.HasSuffix(f.ID, ".head_lag") {
+			continue
+		}
+		lag, ok := parseEvidenceFloat(f.Evidence["lag_blocks"])
+		if !ok {
+			continue
+		}
+		labels := chainLabels(opts)
+		if endpoint := proxydEndpointFromID(f.ID); endpoint != "" {
+			labels["proxyd"] = endpoint
+		}
+		if role := f.Evidence["role"]; role != "" {
+			labels["role"] = role
+		}
+		if _, err := fmt.Fprintf(w, "opstack_doctor_proxyd_head_lag_blocks%s %s\n", renderLabels(labels), formatPromFloat(lag)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -243,6 +272,14 @@ func hasFailFindingPrefix(findings []Finding, prefix string) bool {
 
 func topologyNodeFromID(id string) string {
 	id = strings.TrimPrefix(id, "topology.")
+	if idx := strings.IndexByte(id, '.'); idx >= 0 {
+		return id[:idx]
+	}
+	return ""
+}
+
+func proxydEndpointFromID(id string) string {
+	id = strings.TrimPrefix(id, "proxyd.")
 	if idx := strings.IndexByte(id, '.'); idx >= 0 {
 		return id[:idx]
 	}

@@ -36,7 +36,7 @@ Review version and release notes:
 ```sh
 cat VERSION
 sed -n '1,120p' CHANGELOG.md
-sed -n '1,160p' docs/releases/v0.1.0.md
+sed -n "1,160p" "docs/releases/v$(cat VERSION).md"
 ```
 
 ## Tag And Publish
@@ -44,7 +44,7 @@ sed -n '1,160p' docs/releases/v0.1.0.md
 Use semantic version tags prefixed with `v`:
 
 ```sh
-VERSION=0.1.0
+VERSION="$(cat VERSION)"
 test "$(cat VERSION)" = "${VERSION}"
 git tag "v${VERSION}"
 git push origin "v${VERSION}"
@@ -69,7 +69,7 @@ After the workflow finishes:
 4. Download the archive for your platform and verify it:
 
 ```sh
-VERSION=0.1.0
+VERSION="$(cat VERSION)"
 OS=linux
 ARCH=amd64
 sha256sum -c SHA256SUMS --ignore-missing
@@ -79,17 +79,15 @@ tar -xzf "opstack-doctor_${VERSION}_${OS}_${ARCH}.tar.gz"
 ```
 
 5. Confirm `opstack-doctor version` prints the tagged version.
-6. Compare the GitHub release notes against `docs/releases/v0.1.0.md` and `CHANGELOG.md`.
+6. Compare the GitHub release notes against `docs/releases/v$(cat VERSION).md` and `CHANGELOG.md`.
 
 If Docker is available, verify the container image too:
 
 ```sh
-OWNER_REPO=OWNER/REPO
+OWNER_REPO=CruzMolina/opstack-doctor
 docker run --rm "ghcr.io/${OWNER_REPO}:v${VERSION}" version
 docker run --rm "ghcr.io/${OWNER_REPO}:${VERSION}" version
 ```
-
-Replace `OWNER/REPO` with the published repository path.
 
 ## Patch Releases
 

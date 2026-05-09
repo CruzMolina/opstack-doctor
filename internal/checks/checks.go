@@ -22,6 +22,7 @@ const (
 	DocLightNodes        = "https://www.optimism.io/blog/light-nodes-specialize-your-op-node-fleet"
 	DocInterop           = "https://docs.optimism.io/op-stack/interop/explainer"
 	DocMetrics           = "https://docs.optimism.io/node-operators/guides/monitoring/metrics"
+	DocProxyd            = "https://docs.optimism.io/operators/chain-operators/tools/proxyd"
 )
 
 type Runner struct {
@@ -63,6 +64,7 @@ func (r Runner) Run(ctx context.Context, cfg config.Config) []report.Finding {
 	metricStates, metricFindings := r.checkOPNodeMetrics(ctx, cfg)
 	findings = append(findings, metricFindings...)
 	findings = append(findings, r.checkTopology(ctx, cfg, metricStates)...)
+	findings = append(findings, r.checkProxyd(ctx, cfg)...)
 	findings = append(findings, r.checkInterop(ctx, cfg)...)
 	return findings
 }
@@ -547,6 +549,226 @@ func compareTopologyMetricSafeHeads(cfg config.Config, sourceState, nodeState no
 		return []report.Finding{finding("topology."+nodeState.node.Name+".safe_head_metrics", "Follower safe head lags source", report.SeverityWarn, target, fmt.Sprintf("safe-head lag is %.0f blocks", lag), "Treat source-tier and follower-safe-head lag as production alerts.", []string{DocMetrics, DocLightNodes}, evidence)}
 	}
 	return []report.Finding{finding("topology."+nodeState.node.Name+".safe_head_metrics", "Follower safe head tracks source", report.SeverityOK, target, fmt.Sprintf("safe-head lag is %.0f blocks", lag), "No action needed.", []string{DocMetrics, DocLightNodes}, evidence)}
+}
+
+func (r Runner) checkProxyd(ctx context.Context, cfg config.Config) []report.Finding {
+	if !cfg.Proxyd.Enabled {
+		if specializedTopologyConfigured(cfg) {
+			return []report.Finding{finding("proxyd.disabled", "proxyd checks are not configured", report.SeverityWarn, "proxyd", "proxyd.enabled=false", "For production source/light-node topology, put the deriver tier behind consensus-aware proxyd and configure proxyd checks here.", []string{DocLightNodes, DocProxyd}, nil)}
+		}
+		return []report.Finding{finding("proxyd.disabled", "proxyd checks are disabled", report.SeverityInfo, "proxyd", "proxyd.enabled=false", "Enable proxyd checks when production RPC routing depends on proxyd or another consensus-aware routing layer.", []string{DocProxyd}, nil)}
+	}
+	if len(cfg.Proxyd.Endpoints) == 0 {
+		return []report.Finding{finding("proxyd.endpoints", "No proxyd endpoints configured", report.SeverityWarn, "proxyd.endpoints", "proxyd.enabled=true but endpoint list is empty", "Add deriver and/or edge proxyd endpoints so routing readiness can be checked.", []string{DocLightNodes, DocProxyd}, nil)}
+	}
+
+	nodes := make(map[string]config.OPNodeConfig, len(cfg.OPNodes))
+	for _, node := range cfg.OPNodes {
+		nodes[node.Name] = node
+	}
+	var findings []report.Finding
+	for _, endpoint := range cfg.Proxyd.Endpoints {
+		findings = append(findings, r.checkProxydEndpoint(ctx, cfg, endpoint, nodes)...)
+	}
+	return findings
+}
+
+func specializedTopologyConfigured(cfg config.Config) bool {
+	hasSource := false
+	hasFollower := false
+	for _, node := range cfg.OPNodes {
+		switch node.Role {
+		case "source":
+			hasSource = true
+		case "light", "sequencer":
+			hasFollower = true
+		}
+	}
+	return hasSource && hasFollower
+}
+
+type proxydEndpointProbe struct {
+	head   uint64
+	headOK bool
+}
+
+func (r Runner) checkProxydEndpoint(ctx context.Context, cfg config.Config, endpoint config.ProxydEndpointConfig, nodes map[string]config.OPNodeConfig) []report.Finding {
+	var findings []report.Finding
+	target := proxydTarget(endpoint)
+
+	findings = append(findings, checkProxydConsensusIntent(endpoint))
+	probe, probeFindings := r.probeProxydRPC(ctx, cfg, endpoint)
+	findings = append(findings, probeFindings...)
+	findings = append(findings, r.checkProxydMetrics(ctx, endpoint)...)
+	findings = append(findings, r.checkProxydBackends(ctx, cfg, endpoint, nodes, probe)...)
+	if len(endpoint.ExpectedBackends) > 0 {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".backends", "proxyd expected backends are declared", report.SeverityOK, target, fmt.Sprintf("%d expected backends configured", len(endpoint.ExpectedBackends)), "Keep this list aligned with proxyd backend groups and service discovery.", []string{DocLightNodes, DocProxyd}, map[string]string{"backend_count": fmt.Sprintf("%d", len(endpoint.ExpectedBackends)), "role": endpoint.Role}))
+	}
+	return findings
+}
+
+func checkProxydConsensusIntent(endpoint config.ProxydEndpointConfig) report.Finding {
+	target := proxydTarget(endpoint)
+	evidence := map[string]string{"role": endpoint.Role, "consensus_aware": fmt.Sprintf("%t", endpoint.ConsensusAware)}
+	switch {
+	case endpoint.Role == "deriver" && endpoint.ConsensusAware:
+		return finding("proxyd."+endpoint.Name+".consensus_aware", "Deriver proxyd is declared consensus aware", report.SeverityOK, target, "consensus_aware=true", "Validate the actual proxyd TOML separately; this check records intended routing behavior from doctor config.", []string{DocLightNodes, DocProxyd}, evidence)
+	case endpoint.Role == "deriver":
+		return finding("proxyd."+endpoint.Name+".consensus_aware", "Deriver proxyd is not declared consensus aware", report.SeverityWarn, target, "consensus_aware=false", "OP Labs recommends the deriver tier sit behind consensus-aware proxyd so downstream light nodes follow a stable source endpoint.", []string{DocLightNodes, DocProxyd}, evidence)
+	case endpoint.ConsensusAware:
+		return finding("proxyd."+endpoint.Name+".consensus_aware", "proxyd is declared consensus aware", report.SeverityOK, target, "consensus_aware=true", "Confirm the deployed proxyd config enables the matching routing strategy.", []string{DocProxyd}, evidence)
+	default:
+		return finding("proxyd."+endpoint.Name+".consensus_aware", "proxyd consensus awareness not declared", report.SeverityInfo, target, "consensus_aware=false", "This is informational for non-deriver endpoints; use consensus-aware routing where production RPC correctness depends on backend consensus.", []string{DocProxyd}, evidence)
+	}
+}
+
+func (r Runner) probeProxydRPC(ctx context.Context, cfg config.Config, endpoint config.ProxydEndpointConfig) (proxydEndpointProbe, []report.Finding) {
+	target := proxydTarget(endpoint)
+	if strings.TrimSpace(endpoint.RPC) == "" {
+		return proxydEndpointProbe{}, []report.Finding{finding("proxyd."+endpoint.Name+".rpc", "proxyd RPC endpoint is not configured", report.SeverityWarn, target+".rpc", "rpc URL is empty", "Configure the externally used proxyd RPC URL to validate routing reachability and head lag.", []string{DocProxyd}, nil)}
+	}
+	client := rpc.NewClient(endpoint.RPC, r.Timeout)
+	var findings []report.Finding
+
+	chainID, err := client.ChainID(ctx)
+	if err != nil {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".rpc", "proxyd RPC is unreachable", report.SeverityFail, target+".rpc", err.Error(), "Check proxyd process health, routing config, backend availability, and network access.", []string{DocProxyd}, map[string]string{"rpc": client.RedactedEndpoint(), "role": endpoint.Role}))
+		return proxydEndpointProbe{}, findings
+	}
+	if cfg.Chain.ChainID != 0 && chainID != cfg.Chain.ChainID {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".chain_id", "proxyd chain ID does not match config", report.SeverityFail, target+".rpc", fmt.Sprintf("chain_id=%d", chainID), "Point proxyd at backends for the configured chain before routing production traffic.", []string{DocProxyd}, map[string]string{"expected_chain_id": fmt.Sprintf("%d", cfg.Chain.ChainID), "observed_chain_id": fmt.Sprintf("%d", chainID), "rpc": client.RedactedEndpoint(), "role": endpoint.Role}))
+	} else {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".chain_id", "proxyd chain ID matches config", report.SeverityOK, target+".rpc", fmt.Sprintf("chain_id=%d", chainID), "No action needed.", []string{DocProxyd}, map[string]string{"observed_chain_id": fmt.Sprintf("%d", chainID), "rpc": client.RedactedEndpoint(), "role": endpoint.Role}))
+	}
+
+	head, err := client.BlockNumber(ctx)
+	if err != nil {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".head", "proxyd head read failed", report.SeverityFail, target+".rpc", err.Error(), "Verify proxyd can serve eth_blockNumber from healthy backends.", []string{DocProxyd}, map[string]string{"rpc": client.RedactedEndpoint(), "role": endpoint.Role}))
+		return proxydEndpointProbe{}, findings
+	}
+	findings = append(findings, finding("proxyd."+endpoint.Name+".head", "proxyd head is reachable", report.SeverityOK, target+".rpc", fmt.Sprintf("head=%d", head), "Track this over time through opstack-doctor exported metrics or native proxyd metrics.", []string{DocProxyd}, map[string]string{"head": fmt.Sprintf("%d", head), "rpc": client.RedactedEndpoint(), "role": endpoint.Role}))
+	return proxydEndpointProbe{head: head, headOK: true}, findings
+}
+
+func (r Runner) checkProxydMetrics(ctx context.Context, endpoint config.ProxydEndpointConfig) []report.Finding {
+	target := proxydTarget(endpoint) + ".metrics"
+	if strings.TrimSpace(endpoint.Metrics) == "" {
+		return []report.Finding{finding("proxyd."+endpoint.Name+".metrics", "proxyd metrics endpoint is not configured", report.SeverityWarn, target, "metrics URL is empty", "Configure proxyd Prometheus metrics so request latency, error rates, backend health, and consensus routing can be observed.", []string{DocProxyd, DocMetrics}, nil)}
+	}
+	samples, err := r.fetchMetrics(ctx, endpoint.Metrics)
+	if err != nil {
+		return []report.Finding{finding("proxyd."+endpoint.Name+".metrics", "proxyd metrics fetch failed", report.SeverityWarn, target, err.Error(), "Check the proxyd metrics listener, scrape path, and network policy.", []string{DocProxyd, DocMetrics}, map[string]string{"metrics": redact.URL(endpoint.Metrics), "role": endpoint.Role})}
+	}
+	findings := []report.Finding{finding("proxyd."+endpoint.Name+".metrics", "proxyd metrics are reachable", report.SeverityOK, target, fmt.Sprintf("%d metric samples parsed", len(samples)), "Wire proxyd latency, error-rate, backend-health, and consensus-routing metrics into production dashboards.", []string{DocProxyd, DocMetrics}, map[string]string{"metrics": redact.URL(endpoint.Metrics), "samples": fmt.Sprintf("%d", len(samples)), "role": endpoint.Role})}
+	proxydSeries := countMetricPrefix(samples, "proxyd")
+	if proxydSeries == 0 {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".metrics_names", "proxyd metric names were not detected", report.SeverityInfo, target, "no parsed metric name started with proxyd", "This may be normal if metrics are renamed or relabeled; manually confirm the endpoint exposes proxyd backend health and routing metrics.", []string{DocProxyd, DocMetrics}, map[string]string{"samples": fmt.Sprintf("%d", len(samples)), "role": endpoint.Role}))
+	} else {
+		findings = append(findings, finding("proxyd."+endpoint.Name+".metrics_names", "proxyd metric names are present", report.SeverityOK, target, fmt.Sprintf("%d proxyd metric samples parsed", proxydSeries), "No action needed.", []string{DocProxyd, DocMetrics}, map[string]string{"proxyd_samples": fmt.Sprintf("%d", proxydSeries), "role": endpoint.Role}))
+	}
+	return findings
+}
+
+func (r Runner) checkProxydBackends(ctx context.Context, cfg config.Config, endpoint config.ProxydEndpointConfig, nodes map[string]config.OPNodeConfig, probe proxydEndpointProbe) []report.Finding {
+	target := proxydTarget(endpoint)
+	if len(endpoint.ExpectedBackends) == 0 {
+		return []report.Finding{finding("proxyd."+endpoint.Name+".backends", "proxyd expected backends are not declared", report.SeverityWarn, target, "expected_backends is empty", "Declare the op-node backends this proxyd endpoint should route to so doctor can compare heads and topology intent.", []string{DocLightNodes, DocProxyd}, map[string]string{"role": endpoint.Role})}
+	}
+
+	var findings []report.Finding
+	readableHeads := map[string]uint64{}
+	roleCounts := map[string]int{}
+	for _, backendName := range endpoint.ExpectedBackends {
+		node, ok := nodes[backendName]
+		if !ok {
+			findings = append(findings, finding("proxyd."+endpoint.Name+".backend."+backendName, "proxyd backend is not configured as an op-node", report.SeverityFail, target, "unknown backend "+backendName, "Fix expected_backends so each name points at a configured op-node.", []string{DocLightNodes, DocProxyd}, map[string]string{"backend": backendName, "role": endpoint.Role}))
+			continue
+		}
+		roleCounts[node.Role]++
+		if strings.TrimSpace(node.RPC) == "" {
+			findings = append(findings, finding("proxyd."+endpoint.Name+".backend."+node.Name+".head", "proxyd backend RPC is not configured", report.SeverityWarn, "op_nodes."+node.Name+".rpc", "rpc URL is empty", "Configure backend op-node RPC if you want doctor to compare proxyd routing head against this backend.", []string{DocLightNodes, DocProxyd}, map[string]string{"backend": node.Name, "backend_role": node.Role, "role": endpoint.Role}))
+			continue
+		}
+		client := rpc.NewClient(node.RPC, r.Timeout)
+		head, err := client.BlockNumber(ctx)
+		if err != nil {
+			findings = append(findings, finding("proxyd."+endpoint.Name+".backend."+node.Name+".head", "proxyd backend head read failed", report.SeverityWarn, "op_nodes."+node.Name+".rpc", err.Error(), "Check backend op-node RPC reachability; this does not prove proxyd is using the backend, only that the declared backend can be compared.", []string{DocLightNodes, DocProxyd}, map[string]string{"backend": node.Name, "backend_role": node.Role, "backend_rpc": client.RedactedEndpoint(), "role": endpoint.Role}))
+			continue
+		}
+		readableHeads[node.Name] = head
+		findings = append(findings, finding("proxyd."+endpoint.Name+".backend."+node.Name+".head", "proxyd backend head is reachable", report.SeverityOK, "op_nodes."+node.Name+".rpc", fmt.Sprintf("head=%d", head), "No action needed.", []string{DocLightNodes, DocProxyd}, map[string]string{"backend": node.Name, "backend_role": node.Role, "head": fmt.Sprintf("%d", head), "backend_rpc": client.RedactedEndpoint(), "role": endpoint.Role}))
+	}
+
+	findings = append(findings, checkProxydBackendRoles(endpoint, roleCounts)...)
+	if probe.headOK {
+		findings = append(findings, compareProxydBackendHeads(cfg, endpoint, probe.head, readableHeads)...)
+	}
+	return findings
+}
+
+func checkProxydBackendRoles(endpoint config.ProxydEndpointConfig, roleCounts map[string]int) []report.Finding {
+	target := proxydTarget(endpoint)
+	switch endpoint.Role {
+	case "deriver":
+		sources := roleCounts["source"]
+		if sources >= 2 {
+			return []report.Finding{finding("proxyd."+endpoint.Name+".backend_roles", "Deriver proxyd fronts redundant source nodes", report.SeverityOK, target, fmt.Sprintf("%d source backends declared", sources), "Keep this deriver tier sized for derivation throughput and failover.", []string{DocLightNodes, DocProxyd}, map[string]string{"source_backends": fmt.Sprintf("%d", sources), "role": endpoint.Role})}
+		}
+		return []report.Finding{finding("proxyd."+endpoint.Name+".backend_roles", "Deriver proxyd lacks source redundancy", report.SeverityWarn, target, fmt.Sprintf("%d source backends declared", sources), "Add at least two source-node backends behind the deriver-tier proxyd.", []string{DocLightNodes, DocProxyd}, map[string]string{"source_backends": fmt.Sprintf("%d", sources), "role": endpoint.Role})}
+	case "edge":
+		followers := roleCounts["light"] + roleCounts["sequencer"]
+		if followers > 0 {
+			return []report.Finding{finding("proxyd."+endpoint.Name+".backend_roles", "Edge proxyd fronts follower tier nodes", report.SeverityOK, target, fmt.Sprintf("%d light/sequencer backends declared", followers), "Scale this tier with read demand while keeping derivation concentrated on source nodes.", []string{DocLightNodes, DocProxyd}, map[string]string{"follower_backends": fmt.Sprintf("%d", followers), "role": endpoint.Role})}
+		}
+		return []report.Finding{finding("proxyd."+endpoint.Name+".backend_roles", "Edge proxyd does not declare follower backends", report.SeverityInfo, target, "no light or sequencer backends declared", "The OP Labs reference architecture puts a light-node tier in front of the deriver tier for production read capacity.", []string{DocLightNodes, DocProxyd}, map[string]string{"role": endpoint.Role})}
+	default:
+		return nil
+	}
+}
+
+func compareProxydBackendHeads(cfg config.Config, endpoint config.ProxydEndpointConfig, proxydHead uint64, backendHeads map[string]uint64) []report.Finding {
+	target := proxydTarget(endpoint)
+	if len(backendHeads) == 0 {
+		return []report.Finding{finding("proxyd."+endpoint.Name+".head_lag", "proxyd head comparison unavailable", report.SeverityInfo, target, "no declared backend heads were readable", "Make backend RPCs reachable to compare proxyd routing head against the declared backend tier.", []string{DocLightNodes, DocProxyd}, map[string]string{"proxyd_head": fmt.Sprintf("%d", proxydHead), "role": endpoint.Role})}
+	}
+	var backendMax uint64
+	for _, head := range backendHeads {
+		if head > backendMax {
+			backendMax = head
+		}
+	}
+	lag := uint64(0)
+	if backendMax > proxydHead {
+		lag = backendMax - proxydHead
+	}
+	evidence := map[string]string{
+		"proxyd_head":      fmt.Sprintf("%d", proxydHead),
+		"backend_max_head": fmt.Sprintf("%d", backendMax),
+		"lag_blocks":       fmt.Sprintf("%d", lag),
+		"backend_count":    fmt.Sprintf("%d", len(backendHeads)),
+		"role":             endpoint.Role,
+	}
+	if lag > cfg.Thresholds.MaxSafeLagBlocks {
+		return []report.Finding{finding("proxyd."+endpoint.Name+".head_lag", "proxyd head lags declared backends", report.SeverityWarn, target, fmt.Sprintf("proxyd is %d blocks behind the latest readable backend", lag), "Investigate proxyd backend health, routing strategy, and consensus tracker state before relying on this routing endpoint.", []string{DocLightNodes, DocProxyd}, evidence)}
+	}
+	return []report.Finding{finding("proxyd."+endpoint.Name+".head_lag", "proxyd head tracks declared backends", report.SeverityOK, target, fmt.Sprintf("lag is %d blocks", lag), "No action needed.", []string{DocLightNodes, DocProxyd}, evidence)}
+}
+
+func countMetricPrefix(samples []metrics.Sample, prefix string) int {
+	count := 0
+	for _, sample := range samples {
+		if sample.Name == prefix || strings.HasPrefix(sample.Name, prefix+"_") {
+			count++
+		}
+	}
+	return count
+}
+
+func proxydTarget(endpoint config.ProxydEndpointConfig) string {
+	if endpoint.Name == "" {
+		return "proxyd.endpoints"
+	}
+	return "proxyd." + endpoint.Name
 }
 
 func (r Runner) checkInterop(ctx context.Context, cfg config.Config) []report.Finding {

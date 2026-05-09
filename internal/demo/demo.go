@@ -48,6 +48,11 @@ func Config(scenario string) (config.Config, func(), error) {
 		servers = append(servers, srv)
 		return srv.URL
 	}
+	addProxydMetrics := func() string {
+		srv := newProxydMetricsServer()
+		servers = append(servers, srv)
+		return srv.URL
+	}
 	cleanup := func() {
 		for _, srv := range servers {
 			srv.Close()
@@ -85,26 +90,52 @@ func Config(scenario string) (config.Config, func(), error) {
 	switch scenario {
 	case ScenarioHealthy:
 		base()
+		source1RPC := addRPC(rpcSpec{version: "op-node/source-1", chainID: 10, head: 100, salt: "source1"})
+		source2RPC := addRPC(rpcSpec{version: "op-node/source-2", chainID: 10, head: 100, salt: "source2"})
+		lightRPC := addRPC(rpcSpec{version: "op-node/light-1", chainID: 10, head: 99, salt: "light"})
 		cfg.OPNodes = []config.OPNodeConfig{
-			{Name: "source-1", Role: "source", RPC: addRPC(rpcSpec{version: "op-node/source-1", chainID: 10, head: 100, salt: "source1"}), Metrics: addMetrics(metricsSpec{up: 1, safe: 100, peers: 3})},
-			{Name: "source-2", Role: "source", RPC: addRPC(rpcSpec{version: "op-node/source-2", chainID: 10, head: 100, salt: "source2"}), Metrics: addMetrics(metricsSpec{up: 1, safe: 100, peers: 3})},
-			{Name: "light-1", Role: "light", RPC: addRPC(rpcSpec{version: "op-node/light-1", chainID: 10, head: 99, salt: "light"}), Metrics: addMetrics(metricsSpec{up: 1, safe: 99, peers: 2}), Follows: "source-1"},
+			{Name: "source-1", Role: "source", RPC: source1RPC, Metrics: addMetrics(metricsSpec{up: 1, safe: 100, peers: 3})},
+			{Name: "source-2", Role: "source", RPC: source2RPC, Metrics: addMetrics(metricsSpec{up: 1, safe: 100, peers: 3})},
+			{Name: "light-1", Role: "light", RPC: lightRPC, Metrics: addMetrics(metricsSpec{up: 1, safe: 99, peers: 2}), Follows: "source-1"},
+		}
+		cfg.Proxyd = config.ProxydConfig{
+			Enabled: true,
+			Endpoints: []config.ProxydEndpointConfig{
+				{Name: "deriver-proxyd", Role: "deriver", RPC: addRPC(rpcSpec{version: "proxyd/deriver", chainID: 10, head: 100, salt: "proxyd"}), Metrics: addProxydMetrics(), ConsensusAware: true, ExpectedBackends: []string{"source-1", "source-2"}},
+				{Name: "edge-proxyd", Role: "edge", RPC: addRPC(rpcSpec{version: "proxyd/edge", chainID: 10, head: 99, salt: "edge"}), Metrics: addProxydMetrics(), ConsensusAware: true, ExpectedBackends: []string{"light-1"}},
+			},
 		}
 	case ScenarioWarn:
 		base()
 		cfg.Execution.ReferenceRPC = addRPC(rpcSpec{version: "op-geth/v1.101.0-demo", chainID: 10, head: 100, salt: "same"})
 		cfg.Execution.CandidateRPC = addRPC(rpcSpec{version: "op-reth/v1.0.0-demo", chainID: 10, head: 98, salt: "same"})
+		sourceRPC := addRPC(rpcSpec{version: "op-node/source-1", chainID: 10, head: 100, salt: "source1"})
+		lightRPC := addRPC(rpcSpec{version: "op-node/light-1", chainID: 10, head: 70, salt: "light"})
 		cfg.OPNodes = []config.OPNodeConfig{
-			{Name: "source-1", Role: "source", RPC: addRPC(rpcSpec{version: "op-node/source-1", chainID: 10, head: 100, salt: "source1"}), Metrics: addMetrics(metricsSpec{up: 1, safe: 100, peers: 0, derivationErrors: 1})},
-			{Name: "light-1", Role: "light", RPC: addRPC(rpcSpec{version: "op-node/light-1", chainID: 10, head: 70, salt: "light"}), Metrics: addMetrics(metricsSpec{up: 1, safe: 70, peers: 1}), Follows: "source-1"},
+			{Name: "source-1", Role: "source", RPC: sourceRPC, Metrics: addMetrics(metricsSpec{up: 1, safe: 100, peers: 0, derivationErrors: 1})},
+			{Name: "light-1", Role: "light", RPC: lightRPC, Metrics: addMetrics(metricsSpec{up: 1, safe: 70, peers: 1}), Follows: "source-1"},
+		}
+		cfg.Proxyd = config.ProxydConfig{
+			Enabled: true,
+			Endpoints: []config.ProxydEndpointConfig{
+				{Name: "deriver-proxyd", Role: "deriver", RPC: addRPC(rpcSpec{version: "proxyd/deriver", chainID: 10, head: 70, salt: "proxyd"}), Metrics: addProxydMetrics(), ConsensusAware: false, ExpectedBackends: []string{"source-1"}},
+			},
 		}
 	case ScenarioFail:
 		base()
 		cfg.Execution.ReferenceRPC = addRPC(rpcSpec{version: "op-geth/v1.101.0-demo", chainID: 10, head: 100, salt: "ref"})
 		cfg.Execution.CandidateRPC = addRPC(rpcSpec{version: "op-geth/v1.101.0-demo", chainID: 10, head: 90, salt: "cand"})
+		sourceRPC := addRPC(rpcSpec{version: "op-node/source-1", chainID: 10, head: 100, salt: "source1"})
+		lightRPC := addRPC(rpcSpec{version: "op-node/light-1", chainID: 10, head: 60, salt: "light"})
 		cfg.OPNodes = []config.OPNodeConfig{
-			{Name: "source-1", Role: "source", RPC: addRPC(rpcSpec{version: "op-node/source-1", chainID: 10, head: 100, salt: "source1"}), Metrics: addMetrics(metricsSpec{up: 0, safe: 100, peers: 0, pipelineResets: 2})},
-			{Name: "light-1", Role: "light", RPC: addRPC(rpcSpec{version: "op-node/light-1", chainID: 10, head: 60, salt: "light"}), Metrics: addMetrics(metricsSpec{up: 1, safe: 60, peers: 0}), Follows: "source-1"},
+			{Name: "source-1", Role: "source", RPC: sourceRPC, Metrics: addMetrics(metricsSpec{up: 0, safe: 100, peers: 0, pipelineResets: 2})},
+			{Name: "light-1", Role: "light", RPC: lightRPC, Metrics: addMetrics(metricsSpec{up: 1, safe: 60, peers: 0}), Follows: "source-1"},
+		}
+		cfg.Proxyd = config.ProxydConfig{
+			Enabled: true,
+			Endpoints: []config.ProxydEndpointConfig{
+				{Name: "deriver-proxyd", Role: "deriver", RPC: addRPC(rpcSpec{version: "proxyd/deriver", chainID: 999, head: 40, salt: "proxyd"}), Metrics: addProxydMetrics(), ConsensusAware: false, ExpectedBackends: []string{"source-1"}},
+			},
 		}
 	default:
 		cleanup()
@@ -196,6 +227,14 @@ func newMetricsServer(spec metricsSpec) *httptest.Server {
 		fmt.Fprintf(w, "op_node_default_derivation_errors_total %.0f\n", spec.derivationErrors)
 		fmt.Fprintf(w, "op_node_default_pipeline_resets_total %.0f\n", spec.pipelineResets)
 		fmt.Fprintln(w, "op_node_default_rpc_client_request_duration_seconds_count{method=\"eth_getBlockByNumber\"} 10")
+	}))
+}
+
+func newProxydMetricsServer() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "proxyd_rpc_requests_total{backend=\"source-1\",method=\"eth_blockNumber\"} 12")
+		fmt.Fprintln(w, "proxyd_backend_up{backend=\"source-1\"} 1")
+		fmt.Fprintln(w, "proxyd_backend_request_duration_seconds_count{backend=\"source-1\"} 12")
 	}))
 }
 

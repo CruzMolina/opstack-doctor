@@ -13,6 +13,10 @@ op_nodes:
     role: source
     rpc: "http://source-1.example.invalid"
     metrics: "http://source-1.example.invalid:7300/metrics"
+  - name: source-2
+    role: source
+    rpc: "http://source-2.example.invalid"
+    metrics: "http://source-2.example.invalid:7300/metrics"
   - name: light-1
     role: light
     rpc: "http://light-1.example.invalid"
@@ -23,6 +27,26 @@ op_nodes:
     rpc: "http://sequencer-1.example.invalid"
     metrics: "http://sequencer-1.example.invalid:7300/metrics"
     follows: source-1
+
+proxyd:
+  enabled: true
+  endpoints:
+    - name: deriver-proxyd
+      role: deriver
+      rpc: "http://deriver-proxyd.example.invalid"
+      metrics: "http://deriver-proxyd.example.invalid:9761/metrics"
+      consensus_aware: true
+      expected_backends:
+        - source-1
+        - source-2
+    - name: edge-proxyd
+      role: edge
+      rpc: "http://edge-proxyd.example.invalid"
+      metrics: "http://edge-proxyd.example.invalid:9761/metrics"
+      consensus_aware: true
+      expected_backends:
+        - light-1
+        - sequencer-1
 
 interop:
   enabled: true

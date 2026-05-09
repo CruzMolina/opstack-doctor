@@ -14,6 +14,7 @@ type Config struct {
 	Chain      ChainConfig      `yaml:"chain" json:"chain"`
 	Execution  ExecutionConfig  `yaml:"execution" json:"execution"`
 	OPNodes    []OPNodeConfig   `yaml:"op_nodes" json:"op_nodes"`
+	Proxyd     ProxydConfig     `yaml:"proxyd" json:"proxyd"`
 	Interop    InteropConfig    `yaml:"interop" json:"interop"`
 	Thresholds ThresholdsConfig `yaml:"thresholds" json:"thresholds"`
 }
@@ -36,6 +37,20 @@ type OPNodeConfig struct {
 	RPC     string `yaml:"rpc" json:"rpc"`
 	Metrics string `yaml:"metrics" json:"metrics"`
 	Follows string `yaml:"follows" json:"follows"`
+}
+
+type ProxydConfig struct {
+	Enabled   bool                   `yaml:"enabled" json:"enabled"`
+	Endpoints []ProxydEndpointConfig `yaml:"endpoints" json:"endpoints"`
+}
+
+type ProxydEndpointConfig struct {
+	Name             string   `yaml:"name" json:"name"`
+	Role             string   `yaml:"role" json:"role"`
+	RPC              string   `yaml:"rpc" json:"rpc"`
+	Metrics          string   `yaml:"metrics" json:"metrics"`
+	ConsensusAware   bool     `yaml:"consensus_aware" json:"consensus_aware"`
+	ExpectedBackends []string `yaml:"expected_backends" json:"expected_backends"`
 }
 
 type InteropConfig struct {
@@ -166,6 +181,54 @@ func (c Config) Validate() []ValidationIssue {
 		}
 	}
 
+	if c.Proxyd.Enabled {
+		if len(c.Proxyd.Endpoints) == 0 {
+			add("warn", "proxyd.endpoints", "proxyd checks are enabled but no proxyd endpoints are configured")
+		}
+		proxydNames := map[string]struct{}{}
+		for i, endpoint := range c.Proxyd.Endpoints {
+			prefix := fmt.Sprintf("proxyd.endpoints[%d]", i)
+			if strings.TrimSpace(endpoint.Name) == "" {
+				add("fail", prefix+".name", "proxyd endpoint name is required")
+			}
+			if endpoint.Name != "" {
+				if _, exists := proxydNames[endpoint.Name]; exists {
+					add("fail", prefix+".name", "proxyd endpoint names must be unique")
+				}
+				proxydNames[endpoint.Name] = struct{}{}
+			}
+			if _, ok := validProxydRoles()[endpoint.Role]; !ok {
+				add("fail", prefix+".role", "role must be one of deriver, edge, general")
+			}
+			validateURLField(&issues, prefix+".rpc", endpoint.RPC, false)
+			validateURLField(&issues, prefix+".metrics", endpoint.Metrics, false)
+			if endpoint.Role == "deriver" && !endpoint.ConsensusAware {
+				add("warn", prefix+".consensus_aware", "deriver-tier proxyd should be configured as consensus aware")
+			}
+			if endpoint.Role == "deriver" && len(endpoint.ExpectedBackends) < 2 {
+				add("warn", prefix+".expected_backends", "deriver-tier proxyd should front redundant source nodes")
+			}
+			for j, backendName := range endpoint.ExpectedBackends {
+				field := fmt.Sprintf("%s.expected_backends[%d]", prefix, j)
+				backend, ok := names[backendName]
+				if !ok {
+					add("fail", field, "expected backend must point to a configured op-node")
+					continue
+				}
+				switch endpoint.Role {
+				case "deriver":
+					if backend.Role != "source" {
+						add("fail", field, "deriver-tier proxyd backends must be source op-nodes")
+					}
+				case "edge":
+					if backend.Role == "source" {
+						add("warn", field, "edge proxyd usually fronts the light-node tier, not source nodes")
+					}
+				}
+			}
+		}
+	}
+
 	if c.Interop.Enabled {
 		for i, dep := range c.Interop.Dependencies {
 			prefix := fmt.Sprintf("interop.dependencies[%d]", i)
@@ -188,6 +251,14 @@ func validRoles() map[string]struct{} {
 		"light":      {},
 		"sequencer":  {},
 		"standalone": {},
+	}
+}
+
+func validProxydRoles() map[string]struct{} {
+	return map[string]struct{}{
+		"deriver": {},
+		"edge":    {},
+		"general": {},
 	}
 }
 
