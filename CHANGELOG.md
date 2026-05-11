@@ -4,6 +4,12 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
+## 0.1.7 - Unreleased
+
+### Added
+
+- `promtool test rules` coverage for native op-supervisor and op-interop-mon alert templates.
+
 ## 0.1.6 - 2026-05-11
 
 ### Added

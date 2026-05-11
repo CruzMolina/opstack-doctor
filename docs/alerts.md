@@ -161,4 +161,4 @@ Representative firing behavior is covered by `promtool test rules` fixtures:
 make promtool-test
 ```
 
-Those tests cover a small set of doctor-exported and derived alerts in [../examples/prometheus-rules.test.yaml](../examples/prometheus-rules.test.yaml). They do not prove your Prometheus server accepts every expression after local label edits, so validate customized rules with your own Prometheus tooling before deploying them.
+Those tests cover a small set of doctor-exported, derived, and native interop service alerts in [../examples/prometheus-rules.test.yaml](../examples/prometheus-rules.test.yaml). They do not prove your Prometheus server accepts every expression after local label edits, so validate customized rules with your own Prometheus tooling before deploying them.
