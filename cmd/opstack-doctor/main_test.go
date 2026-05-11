@@ -2,10 +2,13 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"opstack-doctor/internal/report"
 )
 
 func TestRunDemoPrometheus(t *testing.T) {
@@ -24,6 +27,60 @@ func TestRunDemoFailOnWarn(t *testing.T) {
 	code := run([]string{"demo", "--scenario", "warn", "--fail-on", "warn"}, &stdout, &stderr)
 	if code != 1 {
 		t.Fatalf("run demo warn code = %d, want 1; stderr = %s", code, stderr.String())
+	}
+}
+
+func TestRunValidateJSON(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"validate", "--config", "../../examples/doctor.example.yaml", "--output", "json"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("validate code = %d, stderr = %s", code, stderr.String())
+	}
+	var parsed report.JSONReport
+	if err := json.Unmarshal(stdout.Bytes(), &parsed); err != nil {
+		t.Fatalf("validate json did not parse: %v\n%s", err, stdout.String())
+	}
+	if parsed.Summary.OK != 1 || parsed.Summary.Fail != 0 || parsed.Findings[0].ID != "config.valid" {
+		t.Fatalf("unexpected validate json: %+v", parsed)
+	}
+}
+
+func TestRunValidateFailsOnConfigFailure(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "bad.yaml")
+	if err := os.WriteFile(configPath, []byte("chain: {}\nexecution: {}\n"), 0o644); err != nil {
+		t.Fatalf("write bad config: %v", err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"validate", "--config", configPath, "--output", "human"}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("validate code = %d, want 1; stderr = %s; stdout = %s", code, stderr.String(), stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "[FAIL] Configuration issue") {
+		t.Fatalf("validate human output missing fail finding:\n%s", stdout.String())
+	}
+}
+
+func TestRunValidateFailOnWarn(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "warn.yaml")
+	if err := os.WriteFile(configPath, []byte(`
+chain:
+  name: op-mainnet
+  chain_id: 10
+execution:
+  reference_rpc: http://reference.example
+  candidate_rpc: http://candidate.example
+op_nodes:
+  - name: source-1
+    role: source
+  - name: light-1
+    role: light
+`), 0o644); err != nil {
+		t.Fatalf("write warn config: %v", err)
+	}
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"validate", "--config", configPath, "--fail-on", "warn"}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("validate --fail-on warn code = %d, want 1; stderr = %s; stdout = %s", code, stderr.String(), stdout.String())
 	}
 }
 

@@ -4,6 +4,12 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
+## 0.1.10 - Unreleased
+
+### Added
+
+- Offline `opstack-doctor validate --config doctor.yaml` command for config/topology linting without RPC or metrics endpoint access, with human and JSON output.
+
 ## 0.1.9 - 2026-05-11
 
 ### Added

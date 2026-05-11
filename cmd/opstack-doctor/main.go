@@ -13,6 +13,7 @@ import (
 	"opstack-doctor/internal/demo"
 	"opstack-doctor/internal/generate"
 	"opstack-doctor/internal/report"
+	configvalidate "opstack-doctor/internal/validate"
 )
 
 var version = "0.1.9"
@@ -32,6 +33,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	case "check":
 		return runCheck(args[1:], stdout, stderr)
+	case "validate":
+		return runValidate(args[1:], stdout, stderr)
 	case "generate":
 		return runGenerate(args[1:], stdout, stderr)
 	case "export":
@@ -46,6 +49,44 @@ func run(args []string, stdout, stderr io.Writer) int {
 		usage(stderr)
 		return 2
 	}
+}
+
+func runValidate(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("validate", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	configPath := fs.String("config", "doctor.yaml", "path to doctor YAML config")
+	output := fs.String("output", "human", "output format: human or json")
+	failOn := fs.String("fail-on", "fail", "exit nonzero on severity: fail, warn, or none")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "load config: %v\n", err)
+		return 1
+	}
+	findings := configvalidate.Findings(cfg, *configPath)
+	switch *output {
+	case "human":
+		if err := report.RenderHuman(stdout, findings); err != nil {
+			fmt.Fprintf(stderr, "render validation report: %v\n", err)
+			return 1
+		}
+	case "json":
+		if err := report.RenderJSON(stdout, findings); err != nil {
+			fmt.Fprintf(stderr, "render validation report: %v\n", err)
+			return 1
+		}
+	default:
+		fmt.Fprintf(stderr, "invalid --output value %q: expected human or json\n", *output)
+		return 2
+	}
+	code, err := report.ExitCode(findings, *failOn)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	return code
 }
 
 func runDemo(args []string, stdout, stderr io.Writer) int {
@@ -250,6 +291,7 @@ func usage(w io.Writer) {
 	fmt.Fprint(w, `opstack-doctor is a read-only OP Stack diagnostic CLI.
 
 Usage:
+  opstack-doctor validate --config doctor.yaml [--output human|json] [--fail-on fail|warn|none]
   opstack-doctor check --config doctor.yaml [--output human|json|prometheus] [--fail-on fail|warn]
   opstack-doctor check --config doctor.yaml --output prometheus
   opstack-doctor export metrics --config doctor.yaml

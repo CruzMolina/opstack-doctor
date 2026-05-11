@@ -22,7 +22,7 @@ Official references:
 
 ## What It Checks Today
 
-- Config validity, required fields, valid op-node roles, and declared follow-source topology.
+- Offline config validity, required fields, URL shape, valid topology roles, follow-source intent, proxyd backend intent, and basic interop declarations.
 - Execution JSON-RPC reachability using `web3_clientVersion`, `eth_chainId`, `eth_blockNumber`, and block-read methods.
 - Candidate/reference execution head lag, latest common block comparison, and sampled read-only RPC output comparison using `eth_getBlockByNumber`, `eth_getBlockByHash`, and `eth_getBlockTransactionCountByNumber`.
 - Conservative client-family heuristics for op-geth and op-reth/reth.
@@ -77,6 +77,14 @@ The main command is:
 opstack-doctor check --config doctor.yaml
 ```
 
+Validate config and topology intent without contacting RPC or metrics endpoints:
+
+```sh
+opstack-doctor validate --config doctor.yaml
+opstack-doctor validate --config doctor.yaml --output json
+opstack-doctor validate --config doctor.yaml --fail-on warn
+```
+
 Output modes:
 
 ```sh
@@ -92,7 +100,9 @@ opstack-doctor check --config doctor.yaml --fail-on fail
 opstack-doctor check --config doctor.yaml --fail-on warn
 ```
 
-By default, findings are printed and the command exits zero unless there is a config or IO error. `--fail-on fail` exits nonzero when any `fail` finding exists. `--fail-on warn` exits nonzero for either `warn` or `fail`.
+By default, `check` findings are printed and the command exits zero unless there is a config or IO error. `--fail-on fail` exits nonzero when any `fail` finding exists. `--fail-on warn` exits nonzero for either `warn` or `fail`.
+
+`validate` is meant for local linting and CI. It exits nonzero on `fail` findings by default, supports `--fail-on warn` for stricter gates, and supports `--fail-on none` when only report rendering is desired.
 
 ## Prometheus Export
 
@@ -118,7 +128,7 @@ See [examples/deploy](examples/deploy) for a node-exporter textfile script and a
 
 ## Configuration
 
-Start with [examples/doctor.example.yaml](examples/doctor.example.yaml). The config expresses intended topology; the tool validates behavior through read-only RPC and metrics checks.
+Start with [examples/doctor.example.yaml](examples/doctor.example.yaml). The config expresses intended topology; `validate` checks the shape and topology intent offline, while `check` validates live behavior through read-only RPC and metrics checks.
 
 See [docs/config.md](docs/config.md) for a field-by-field schema reference.
 

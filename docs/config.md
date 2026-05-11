@@ -2,6 +2,8 @@
 
 `opstack-doctor` reads a YAML config, usually named `doctor.yaml`. The config is read-only operational intent: it tells the checker which endpoints to query and how the fleet is expected to be shaped.
 
+Use `opstack-doctor validate --config doctor.yaml` to lint required fields, URL shape, roles, follow-source topology, proxyd backend intent, and basic interop dependency declarations without contacting RPC or metrics endpoints.
+
 Start from [examples/doctor.example.yaml](../examples/doctor.example.yaml).
 
 ## Top-Level Fields
@@ -164,7 +166,7 @@ When configured, op-interop-mon metrics checks look for `op_interop_mon_*_up`, `
 
 Configuration failures mean the relevant checks cannot be trusted until config is fixed. Warnings usually mean the tool observed incomplete readiness, missing metrics, weak topology redundancy, or values outside configured thresholds.
 
-Default exit behavior is non-failing unless there is a config/IO error. Use:
+For live checks, default exit behavior is non-failing unless there is a config/IO error. Use:
 
 ```sh
 opstack-doctor check --config doctor.yaml --fail-on fail
@@ -172,3 +174,13 @@ opstack-doctor check --config doctor.yaml --fail-on warn
 ```
 
 for CI or automation gates.
+
+For offline config gates, use:
+
+```sh
+opstack-doctor validate --config doctor.yaml
+opstack-doctor validate --config doctor.yaml --output json
+opstack-doctor validate --config doctor.yaml --fail-on warn
+```
+
+`validate` exits nonzero on `fail` findings by default. Use `--fail-on warn` to fail on warnings too, or `--fail-on none` to render findings without failing on validation severity.
