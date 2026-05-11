@@ -112,7 +112,7 @@ Validation behavior:
 - `deriver` backends must be `source` op-nodes.
 - A deriver proxyd with fewer than two expected source backends emits a warning.
 - A deriver proxyd without `consensus_aware: true` emits a warning.
-- `proxyd_up != 1` emits a failure. Missing key proxyd metrics usually emit warnings or info, depending on whether the metric is required for basic readiness or version/feature-specific observability.
+- `proxyd_up != 1` emits a failure. Missing consensus-aware count/block gauges remain warnings for consensus-aware endpoints. Missing version-specific proxyd metrics such as backend probe health or backend latency are informational so older or differently configured proxyd deployments do not produce noisy warnings.
 - Native proxyd metric checks currently cover process up status, backend probe health, degraded or banned backends, backend sync state, peer-count metric presence, consensus latest/safe/finalized gauges, serving consensus backend counts, CL/source-tier consensus counters, backend error rate, HTTP/backend error-code counters, and backend request latency quantiles.
 
 ## `interop`

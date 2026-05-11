@@ -1,0 +1,11 @@
+# Redacted op-node fixture: healthy source node with alternate ref label names.
+op_node_default_up 1
+op_node_default_refs_number{ref_name="l2_safe"} 150
+op_node_default_refs_number{ref_name="l2_finalized"} 145
+op_node_default_refs_number{ref_name="l2_unsafe"} 151
+op_node_default_peer_count 4
+op_node_default_p2p_peer_count{direction="inbound"} 5
+op_node_default_derivation_errors_total 0
+op_node_default_pipeline_resets_total 0
+op_node_default_rpc_client_request_duration_seconds{method="eth_getBlockByNumber",quantile="0.95"} 0.2
+op_node_default_rpc_client_request_duration_seconds_count{method="eth_getBlockByNumber"} 20

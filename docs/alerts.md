@@ -105,10 +105,10 @@ proxyd_rpc_backend_request_duration_seconds
 
 ## Validation
 
-The Go test suite parses generated alert YAML and the checked-in example file:
+The Go test suite parses generated alert YAML, the checked-in example file, and redacted metric fixtures:
 
 ```sh
-go test ./internal/generate
+go test ./internal/generate ./internal/checks
 ```
 
-This proves the YAML shape is valid for the local structs. It does not prove your Prometheus server accepts every expression after local label edits, so validate customized rules with your Prometheus tooling before deploying them.
+This proves the YAML shape is valid for the local structs and that fixture-backed finding IDs/severities remain stable. It does not prove your Prometheus server accepts every expression after local label edits, so validate customized rules with your Prometheus tooling before deploying them.

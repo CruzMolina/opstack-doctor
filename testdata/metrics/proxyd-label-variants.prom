@@ -1,0 +1,19 @@
+# Redacted proxyd fixture: alternate common label names, especially backend/code.
+proxyd_up 1
+proxyd_group_consensus_latest_block{backend_group_name="legacy-deriver"} 75
+proxyd_group_consensus_safe_block{backend_group_name="legacy-deriver"} 74
+proxyd_group_consensus_finalized_block{backend_group_name="legacy-deriver"} 70
+proxyd_group_consensus_count{backend_group_name="legacy-deriver"} 1
+proxyd_group_consensus_total_count{backend_group_name="legacy-deriver"} 1
+proxyd_backend_probe_healthy{backend="source-legacy"} 1
+proxyd_backend_degraded{backend="source-legacy"} 0
+proxyd_consensus_backend_banned{backend="source-legacy"} 0
+proxyd_consensus_backend_in_sync{backend="source-legacy"} 1
+proxyd_consensus_backend_peer_count{backend="source-legacy"} 8
+proxyd_backend_error_rate{backend="source-legacy"} 0
+proxyd_rpc_errors_total{backend="source-legacy",method_name="eth_blockNumber",error_code="0"} 0
+proxyd_consensus_cl_ban_not_healthy_total{backend="source-legacy"} 0
+proxyd_http_response_codes_total{code="200"} 25
+proxyd_rpc_backend_http_response_codes_total{backend="source-legacy",code="429"} 2
+proxyd_rpc_backend_request_duration_seconds{backend="source-legacy",method_name="eth_blockNumber",quantile="0.95"} 0.400
+proxyd_rpc_backend_request_duration_seconds_count{backend="source-legacy",method_name="eth_blockNumber"} 25
