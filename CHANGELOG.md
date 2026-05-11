@@ -4,6 +4,12 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
+## 0.1.6 - Unreleased
+
+### Added
+
+- `promtool test rules` fixtures for representative generated alerts, including doctor-exported interop readiness, execution lag, and proxyd readiness alerts.
+
 ## 0.1.5 - 2026-05-11
 
 ### Added

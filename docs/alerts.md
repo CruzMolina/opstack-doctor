@@ -153,4 +153,12 @@ The release and CI checks also validate the checked-in generated alert rules wit
 make promtool-check
 ```
 
-This catches PromQL syntax errors in [../examples/prometheus-rules.example.yaml](../examples/prometheus-rules.example.yaml). It does not prove your Prometheus server accepts every expression after local label edits, so validate customized rules with your own Prometheus tooling before deploying them.
+This catches PromQL syntax errors in [../examples/prometheus-rules.example.yaml](../examples/prometheus-rules.example.yaml).
+
+Representative firing behavior is covered by `promtool test rules` fixtures:
+
+```sh
+make promtool-test
+```
+
+Those tests cover a small set of doctor-exported and derived alerts in [../examples/prometheus-rules.test.yaml](../examples/prometheus-rules.test.yaml). They do not prove your Prometheus server accepts every expression after local label edits, so validate customized rules with your own Prometheus tooling before deploying them.
