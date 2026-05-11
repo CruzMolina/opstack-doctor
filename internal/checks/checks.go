@@ -15,6 +15,7 @@ import (
 	"opstack-doctor/internal/redact"
 	"opstack-doctor/internal/report"
 	"opstack-doctor/internal/rpc"
+	configvalidate "opstack-doctor/internal/validate"
 )
 
 const (
@@ -106,28 +107,7 @@ func CompareBlockFields(reference, candidate rpc.Block) ([]BlockDifference, []st
 }
 
 func (r Runner) checkConfig(cfg config.Config) []report.Finding {
-	issues := cfg.Validate()
-	if len(issues) == 0 {
-		return []report.Finding{finding("config.valid", "Configuration is valid", report.SeverityOK, "doctor.yaml", "required fields and topology intent are valid", "Keep this file in version control and review it when topology changes.", nil, nil)}
-	}
-	findings := make([]report.Finding, 0, len(issues))
-	for _, issue := range issues {
-		sev := report.SeverityWarn
-		if issue.Severity == "fail" {
-			sev = report.SeverityFail
-		}
-		findings = append(findings, finding(
-			"config."+strings.ReplaceAll(issue.Field, ".", "_"),
-			"Configuration issue",
-			sev,
-			issue.Field,
-			issue.Message,
-			"Fix the configuration before relying on diagnostic results from affected checks.",
-			nil,
-			nil,
-		))
-	}
-	return findings
+	return configvalidate.Findings(cfg, "doctor.yaml")
 }
 
 func (r Runner) checkExecution(ctx context.Context, cfg config.Config) (map[string]executionEndpointStatus, []report.Finding) {

@@ -75,7 +75,7 @@ func ExitCode(findings []Finding, failOn string) (int, error) {
 		}
 		return 0, nil
 	default:
-		return 0, fmt.Errorf("invalid --fail-on value %q: expected fail or warn", failOn)
+		return 0, fmt.Errorf("invalid --fail-on value %q: expected fail, warn, or none", failOn)
 	}
 }
 
