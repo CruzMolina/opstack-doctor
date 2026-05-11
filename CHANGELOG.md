@@ -4,7 +4,18 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
-## 0.1.2 - Unreleased
+## 0.1.3 - Unreleased
+
+### Added
+
+- Redacted Prometheus metric fixtures for proxyd and op-node healthy, warning, failure, missing-optional, and label-variant cases.
+- Regression tests that assert stable finding IDs and severities from metric fixtures without hitting live endpoints.
+
+### Changed
+
+- Treat missing version-specific proxyd backend probe and backend latency metrics as informational findings instead of warnings.
+
+## 0.1.2 - 2026-05-09
 
 ### Added
 

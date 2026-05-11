@@ -697,7 +697,7 @@ func checkProxydBackendHealthMetrics(endpoint config.ProxydEndpointConfig, sampl
 
 	probeHealthy := metrics.Find(samples, "proxyd_backend_probe_healthy")
 	if len(probeHealthy) == 0 {
-		findings = append(findings, finding("proxyd."+endpoint.Name+".backend_probe_healthy_missing", "proxyd backend probe health metric is missing", report.SeverityWarn, target, "proxyd_backend_probe_healthy was not present", "Enable backend probe metrics where proxyd health checks are configured; they show whether each backend probe is currently healthy.", []string{DocProxyd, DocMetrics}, nil))
+		findings = append(findings, finding("proxyd."+endpoint.Name+".backend_probe_healthy_missing", "proxyd backend probe health metric is missing", report.SeverityInfo, target, "proxyd_backend_probe_healthy was not present", "This can be normal when backend probes or newer proxyd metrics are not enabled; use this metric where available to show whether each backend probe is currently healthy.", []string{DocProxyd, DocMetrics}, nil))
 	} else if bad := samplesByBackendValue(probeHealthy, endpoint.ExpectedBackends, func(v float64) bool { return math.Abs(v-1) > 0.000001 }); len(bad) > 0 {
 		findings = append(findings, finding("proxyd."+endpoint.Name+".backend_probe_healthy", "proxyd backend probes report unhealthy backends", report.SeverityWarn, target, "one or more backend probe health series is not 1", "Investigate backend probe targets, source/light-node health, and proxyd backend removal behavior.", []string{DocProxyd, DocMetrics}, map[string]string{"series": formatSeries(bad), "role": endpoint.Role}))
 	} else {
@@ -834,7 +834,7 @@ func checkProxydLatencyMetrics(endpoint config.ProxydEndpointConfig, samples []m
 	target := proxydTarget(endpoint) + ".metrics"
 	series := metrics.FindPrefix(samples, "proxyd_rpc_backend_request_duration_seconds")
 	if len(series) == 0 {
-		return []report.Finding{finding("proxyd."+endpoint.Name+".backend_latency_missing", "proxyd backend request latency metric is missing", report.SeverityWarn, target, "proxyd_rpc_backend_request_duration_seconds was not present", "Expose backend request duration metrics so operators can detect slow backends and correlate consensus bans with latency.", []string{DocProxyd, DocMetrics}, nil)}
+		return []report.Finding{finding("proxyd."+endpoint.Name+".backend_latency_missing", "proxyd backend request latency metric is missing", report.SeverityInfo, target, "proxyd_rpc_backend_request_duration_seconds was not present", "This can be normal for older proxyd deployments; expose backend request duration metrics where available so operators can detect slow backends and correlate consensus bans with latency.", []string{DocProxyd, DocMetrics}, nil)}
 	}
 	quantiles := quantileSamples(series)
 	max, ok := metrics.MaxValue(quantiles)

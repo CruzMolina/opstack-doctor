@@ -122,6 +122,8 @@ See [docs/config.md](docs/config.md) for a field-by-field schema reference.
 
 For local or mocked endpoints, point `reference_rpc`, `candidate_rpc`, op-node `rpc`, and `metrics` URLs at local `httptest`, anvil-style, or fixture servers that implement the small method set used by the MVP. Tests in this repository do this and never hit public RPC endpoints.
 
+Metric regression fixtures live in [testdata/metrics](testdata/metrics). See [docs/metrics-fixtures.md](docs/metrics-fixtures.md) for how to contribute redacted op-node or proxyd captures safely.
+
 ## Local Demo
 
 Try realistic mocked output without any live infrastructure:

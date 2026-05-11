@@ -15,6 +15,8 @@ Keep checks read-only. New diagnostics must not send transactions, require priva
 
 Tests should use `httptest` or local fixtures. Do not add tests that hit public RPC endpoints, public metrics endpoints, or production infrastructure.
 
+Metric regression fixtures live in [`testdata/metrics`](testdata/metrics). See [docs/metrics-fixtures.md](docs/metrics-fixtures.md) before contributing captured op-node or proxyd metrics; fixtures must be minimized and redacted before they are committed.
+
 ## Adding Checks
 
 - Prefer honest `warn` or `info` findings over false confidence.
