@@ -110,3 +110,50 @@ tests:
             exp_annotations:
               description: Terminal message status changed. Treat valid/invalid flips as high-signal interop incidents.
               summary: op-interop-mon terminal status changes observed
+
+  - name: healthy inputs do not fire representative alerts
+    interval: 1m
+    input_series:
+      - series: 'opstack_doctor_finding{chain="op-mainnet",id="interop.supervisor.expected_chains",severity="ok",target="interop.supervisor.metrics"}'
+        values: '1 1 1 1 1 1 1 1'
+      - series: 'opstack_doctor_finding{chain="op-mainnet",id="interop.monitor.message_status",severity="ok",target="interop.monitor.metrics"}'
+        values: '1 1 1 1 1 1 1 1'
+      - series: 'opstack_doctor_execution_candidate_lag_blocks{chain="op-mainnet"}'
+        values: '0 0 0 0 0 0 0 0'
+      - series: 'opstack_doctor_finding{chain="op-mainnet",id="proxyd.deriver-proxyd.rpc",severity="ok",target="proxyd.deriver-proxyd.rpc"}'
+        values: '1 1 1 1 1 1 1 1'
+      - series: 'op_supervisor_default_up{instance="supervisor-1"}'
+        values: '1 1 1 1 1 1 1 1'
+      - series: 'op_supervisor_default_access_list_verify_failure{chain="10"}'
+        values: '0 0 0 0 0 0 0 0'
+      - series: 'op_interop_mon_default_message_status{executing_chain_id="10",initiating_chain_id="8453",status="valid"}'
+        values: '2 2 2 2 2 2 2 2'
+      - series: 'op_interop_mon_default_message_status{executing_chain_id="10",initiating_chain_id="8453",status="invalid"}'
+        values: '0 0 0 0 0 0 0 0'
+      - series: 'op_interop_mon_default_terminal_status_changes{executing_chain_id="10",initiating_chain_id="8453"}'
+        values: '0 0 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 7m
+        alertname: ProxydEndpointUnhealthy
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: DoctorInteropSupervisorReadinessWarning
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: DoctorInteropMonitorReadinessWarning
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: ExecutionCandidateLaggingReference
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: OpSupervisorDown
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: OpSupervisorAccessListVerifyFailures
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: OpInteropMonitorRiskyMessages
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: OpInteropMonitorTerminalStatusChanges
+        exp_alerts: []
