@@ -1,0 +1,10 @@
+# Redacted op-interop-mon fixture: monitor is up and all observed messages are valid.
+op_interop_mon_default_up 1
+op_interop_mon_default_info{version="v1.0.0-redacted"} 1
+op_interop_mon_default_message_status{executing_chain_id="10",initiating_chain_id="8453",status="valid"} 8
+op_interop_mon_default_message_status{executing_chain_id="10",initiating_chain_id="8453",status="invalid"} 0
+op_interop_mon_default_terminal_status_changes{executing_chain_id="10",initiating_chain_id="8453"} 0
+op_interop_mon_default_executing_block_range{chain_id="10",range_type="min"} 100
+op_interop_mon_default_executing_block_range{chain_id="10",range_type="max"} 110
+op_interop_mon_default_initiating_block_range{chain_id="8453",range_type="min"} 200
+op_interop_mon_default_initiating_block_range{chain_id="8453",range_type="max"} 220

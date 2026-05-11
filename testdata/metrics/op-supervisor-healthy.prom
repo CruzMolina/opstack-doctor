@@ -1,0 +1,16 @@
+# Redacted op-supervisor fixture: healthy dependency-set coverage for local and cross safety heads.
+op_supervisor_default_up 1
+op_supervisor_default_info{version="v1.0.0-redacted"} 1
+op_supervisor_default_refs_number{layer="l2",type="local_unsafe",chain="10"} 200
+op_supervisor_default_refs_number{layer="l2",type="cross_unsafe",chain="10"} 199
+op_supervisor_default_refs_number{layer="l2",type="local_safe",chain="10"} 190
+op_supervisor_default_refs_number{layer="l2",type="cross_safe",chain="10"} 189
+op_supervisor_default_refs_number{layer="l2",type="local_unsafe",chain="8453"} 300
+op_supervisor_default_refs_number{layer="l2",type="cross_unsafe",chain="8453"} 299
+op_supervisor_default_refs_number{layer="l2",type="local_safe",chain="8453"} 290
+op_supervisor_default_refs_number{layer="l2",type="cross_safe",chain="8453"} 289
+op_supervisor_default_access_list_verify_failure{chain="10"} 0
+op_supervisor_default_logdb_entries_current{chain="10",kind="events"} 123
+op_supervisor_default_logdb_entries_current{chain="8453",kind="events"} 456
+op_supervisor_default_rpc_client_requests_total{rpc="l2",method="eth_getBlockByNumber"} 25
+op_supervisor_default_rpc_server_requests_total{rpc="admin",method="supervisor_checkAccessList"} 5

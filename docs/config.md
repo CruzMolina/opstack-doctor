@@ -121,6 +121,8 @@ Validation behavior:
 | --- | --- | --- | --- | --- |
 | `enabled` | boolean | no | `false` | Enables basic dependency endpoint checks. |
 | `dependencies` | list | when enabled | empty | Chains in the configured dependency set. |
+| `supervisor` | object | no | empty | Optional op-supervisor metrics readiness checks. |
+| `monitor` | object | no | empty | Optional op-interop-mon metrics readiness checks. |
 
 Each dependency:
 
@@ -132,6 +134,23 @@ Each dependency:
 | `metrics` | URL string | no | empty | Dependency metrics endpoint, if available. |
 
 Interop checks are basic readiness checks only. They verify dependency RPC reachability, chain ID, block-number readability, and metrics reachability when provided. They do not validate cross-chain messages, access lists, op-supervisor behavior, or full protocol correctness.
+
+`supervisor` fields:
+
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `metrics` | URL string | no | empty | op-supervisor Prometheus metrics endpoint. |
+| `expected_chains` | list of integers | no | local chain plus dependencies | Chain IDs expected in op-supervisor refs. |
+
+When configured, op-supervisor metrics checks look for `op_supervisor_*_up`, `op_supervisor_*_refs_number`, `op_supervisor_*_access_list_verify_failure`, `op_supervisor_*_logdb_entries_current`, and RPC metric families. `op_supervisor_*_up != 1` is a failure. Missing refs or missing expected chain coverage are warnings. This remains a metrics readiness check, not full interop protocol validation.
+
+`monitor` fields:
+
+| Field | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `metrics` | URL string | no | empty | op-interop-mon Prometheus metrics endpoint. |
+
+When configured, op-interop-mon metrics checks look for `op_interop_mon_*_up`, `op_interop_mon_*_message_status`, `op_interop_mon_*_terminal_status_changes`, and block-range metrics. Nonzero risky message statuses such as `invalid`, `missing`, `failed`, `error`, or `unknown` emit warnings.
 
 ## `thresholds`
 

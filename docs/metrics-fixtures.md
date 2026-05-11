@@ -37,6 +37,10 @@ Small fixtures are better than full scrapes. Include only the metric families ne
 - RPC latency summaries or histograms
 - `proxyd_up`
 - proxyd backend health, consensus, error-rate, response-code, CL/source-tier, and backend latency metrics
+- `op_supervisor_*_up`
+- op-supervisor refs, access-list verification failure, log DB, and RPC metrics
+- `op_interop_mon_*_up`
+- op-interop-mon message status, terminal status changes, and block range metrics
 
 Each fixture should start with a short comment explaining the scenario.
 

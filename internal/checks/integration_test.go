@@ -40,6 +40,10 @@ func TestRunnerWithMockedEndpoints(t *testing.T) {
 	defer proxydMetrics.Close()
 	depMetrics := newMetricsServer(t, 200)
 	defer depMetrics.Close()
+	supervisorMetrics := newSupervisorMetricsServer(t)
+	defer supervisorMetrics.Close()
+	monitorMetrics := newInteropMonitorMetricsServer(t)
+	defer monitorMetrics.Close()
 
 	cfg := config.Config{
 		Chain: config.ChainConfig{Name: "op-mainnet", ChainID: 10},
@@ -62,6 +66,11 @@ func TestRunnerWithMockedEndpoints(t *testing.T) {
 		},
 		Interop: config.InteropConfig{
 			Enabled: true,
+			Supervisor: config.InteropSupervisorConfig{
+				Metrics:        supervisorMetrics.URL,
+				ExpectedChains: []uint64{10, 8453},
+			},
+			Monitor: config.InteropMonitorConfig{Metrics: monitorMetrics.URL},
 			Dependencies: []config.DependencyConfig{
 				{Name: "base", ChainID: 8453, RPC: depRPC.URL, Metrics: depMetrics.URL},
 			},
@@ -74,7 +83,7 @@ func TestRunnerWithMockedEndpoints(t *testing.T) {
 			t.Fatalf("unexpected fail finding: %+v", f)
 		}
 	}
-	for _, id := range []string{"execution.block_compare.match", "execution.rpc_surface.match", "topology.light-1.safe_head_metrics", "proxyd.deriver-proxyd.head_lag", "interop.scope"} {
+	for _, id := range []string{"execution.block_compare.match", "execution.rpc_surface.match", "topology.light-1.safe_head_metrics", "proxyd.deriver-proxyd.head_lag", "interop.scope", "interop.supervisor.expected_chains", "interop.monitor.message_status"} {
 		if !hasFinding(findings, id) {
 			t.Fatalf("missing finding %s; got ids %s", id, findingIDs(findings))
 		}
@@ -321,6 +330,43 @@ proxyd_consensus_cl_output_root_disagreement_total{backend_name="source-1"} 1
 proxyd_http_response_codes_total{status_code="500"} 1
 proxyd_rpc_backend_request_duration_seconds{backend_name="source-1",method_name="eth_blockNumber",batched="false",quantile="0.95"} 3.5
 proxyd_rpc_backend_request_duration_seconds_count{backend_name="source-1",method_name="eth_blockNumber",batched="false"} 10
+`
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+}
+
+func newSupervisorMetricsServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	body := `
+op_supervisor_default_up 1
+op_supervisor_default_info{version="test"} 1
+op_supervisor_default_refs_number{layer="l2",type="local_unsafe",chain="10"} 100
+op_supervisor_default_refs_number{layer="l2",type="cross_unsafe",chain="10"} 99
+op_supervisor_default_refs_number{layer="l2",type="local_safe",chain="10"} 90
+op_supervisor_default_refs_number{layer="l2",type="cross_safe",chain="10"} 89
+op_supervisor_default_refs_number{layer="l2",type="local_unsafe",chain="8453"} 200
+op_supervisor_default_refs_number{layer="l2",type="cross_unsafe",chain="8453"} 199
+op_supervisor_default_refs_number{layer="l2",type="local_safe",chain="8453"} 190
+op_supervisor_default_refs_number{layer="l2",type="cross_safe",chain="8453"} 189
+op_supervisor_default_access_list_verify_failure{chain="10"} 0
+op_supervisor_default_logdb_entries_current{chain="10",kind="events"} 10
+op_supervisor_default_rpc_client_requests_total{rpc="l2",method="eth_blockNumber"} 1
+`
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	}))
+}
+
+func newInteropMonitorMetricsServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	body := `
+op_interop_mon_default_up 1
+op_interop_mon_default_message_status{executing_chain_id="10",initiating_chain_id="8453",status="valid"} 1
+op_interop_mon_default_message_status{executing_chain_id="10",initiating_chain_id="8453",status="invalid"} 0
+op_interop_mon_default_terminal_status_changes{executing_chain_id="10",initiating_chain_id="8453"} 0
+op_interop_mon_default_executing_block_range{chain_id="10",range_type="min"} 100
+op_interop_mon_default_executing_block_range{chain_id="10",range_type="max"} 101
 `
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(body))

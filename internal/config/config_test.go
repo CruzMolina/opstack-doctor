@@ -38,6 +38,19 @@ proxyd:
       expected_backends:
         - source-1
         - source-2
+interop:
+  enabled: true
+  supervisor:
+    metrics: http://supervisor.example:7300/metrics
+    expected_chains:
+      - 10
+      - 8453
+  monitor:
+    metrics: http://interop-mon.example:7300/metrics
+  dependencies:
+    - name: base
+      chain_id: 8453
+      rpc: http://base.example
 thresholds: {}
 `))
 	if err != nil {
@@ -55,6 +68,42 @@ thresholds: {}
 	}
 	if hasSeverity(issues, "warn") {
 		t.Fatalf("Validate() got warn issues: %+v", issues)
+	}
+}
+
+func TestValidateInteropMetricsConfig(t *testing.T) {
+	cfg, err := Parse(strings.NewReader(`
+chain:
+  name: bad
+  chain_id: 10
+execution:
+  reference_rpc: http://reference.example
+  candidate_rpc: http://candidate.example
+interop:
+  enabled: true
+  supervisor:
+    metrics: ftp://supervisor.example/metrics
+    expected_chains:
+      - 0
+  monitor:
+    metrics: ://bad
+  dependencies:
+    - name: base
+      chain_id: 8453
+      rpc: http://base.example
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	issues := cfg.Validate()
+	for _, field := range []string{
+		"interop.supervisor.metrics",
+		"interop.supervisor.expected_chains[0]",
+		"interop.monitor.metrics",
+	} {
+		if !hasField(issues, field) {
+			t.Fatalf("Validate() should flag %s, got %+v", field, issues)
+		}
 	}
 }
 

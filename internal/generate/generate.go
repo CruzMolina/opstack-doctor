@@ -195,6 +195,66 @@ func Alerts(cfg config.Config) ([]byte, error) {
 			},
 		},
 		{
+			Alert:  "OpSupervisorDown",
+			Expr:   "{__name__=~\"op_supervisor_.*_up\"} != 1",
+			For:    "2m",
+			Labels: map[string]string{"severity": "critical"},
+			Annotations: map[string]string{
+				"summary":     "op-supervisor is down",
+				"description": "op-supervisor up metric is not 1. Check process health, metrics scrape target, and supervisor dependencies.",
+			},
+		},
+		{
+			Alert:  "OpSupervisorRefsMissing",
+			Expr:   "absent({__name__=~\"op_supervisor_.*_refs_number\"})",
+			For:    "10m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "op-supervisor refs are missing",
+				"description": "Supervisor refs are absent. Confirm op-supervisor metrics are enabled and tracking local/cross safety heads per dependency-set chain.",
+			},
+		},
+		{
+			Alert:  "OpSupervisorAccessListVerifyFailures",
+			Expr:   "increase({__name__=~\"op_supervisor_.*_access_list_verify_failure\"}[5m]) > 0",
+			For:    "1m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "op-supervisor access-list verification failures observed",
+				"description": "Access-list verification failures increased. Investigate cross-chain message references, dependency-set coverage, and supervisor logs.",
+			},
+		},
+		{
+			Alert:  "OpInteropMonitorDown",
+			Expr:   "{__name__=~\"op_interop_mon_.*_up\"} != 1",
+			For:    "2m",
+			Labels: map[string]string{"severity": "critical"},
+			Annotations: map[string]string{
+				"summary":     "op-interop-mon is down",
+				"description": "op-interop-mon up metric is not 1. Check process health and metrics scrape target.",
+			},
+		},
+		{
+			Alert:  "OpInteropMonitorRiskyMessages",
+			Expr:   "{__name__=~\"op_interop_mon_.*_message_status\",status=~\"invalid|missing|failed|failure|error|unknown\"} > 0",
+			For:    "1m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "op-interop-mon observed risky message status",
+				"description": "Invalid, missing, failed, error, or unknown executing-message statuses are nonzero. Investigate dependency-chain RPC health and message validation.",
+			},
+		},
+		{
+			Alert:  "OpInteropMonitorTerminalStatusChanges",
+			Expr:   "{__name__=~\"op_interop_mon_.*_terminal_status_changes\"} > 0",
+			For:    "1m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "op-interop-mon terminal status changes observed",
+				"description": "Terminal message status changed. Treat valid/invalid flips as high-signal interop incidents.",
+			},
+		},
+		{
 			Alert:  "ExecutionCandidateLaggingReference",
 			Expr:   fmt.Sprintf("opstack_doctor_execution_candidate_lag_blocks{chain=%q} > %d", cfg.Chain.Name, cfg.Execution.MaxHeadLagBlocks),
 			For:    "5m",
@@ -332,6 +392,8 @@ func Runbook(cfg config.Config) []byte {
 	} else {
 		write("- Verify every dependency chain has reachable RPC and metrics.\n")
 		write("- Monitor dependency heads over time; a single diagnostic run only proves reachability.\n")
+		write("- Scrape op-supervisor metrics if this operator runs a supervisor; confirm local/cross safety heads cover the configured dependency set.\n")
+		write("- Scrape op-interop-mon metrics if this operator runs the optional monitor; alert on invalid/missing messages and terminal status changes.\n")
 		write("- This MVP does not validate cross-chain messages or op-supervisor protocol behavior.\n\n")
 		write("Configured dependencies:\n\n")
 		for _, dep := range cfg.Interop.Dependencies {
@@ -343,6 +405,7 @@ func Runbook(cfg config.Config) []byte {
 	write("## Monitoring Checklist\n\n")
 	write("- Scrape `op_node_default_up`, `op_node_default_refs_number`, peer count metrics, derivation errors, pipeline resets, and RPC client latency metrics.\n")
 	write("- Scrape proxyd metrics such as `proxyd_up`, `proxyd_backend_probe_healthy`, `proxyd_group_consensus_count`, `proxyd_backend_degraded`, `proxyd_consensus_backend_banned`, `proxyd_backend_error_rate`, and `proxyd_rpc_backend_request_duration_seconds`.\n")
+	write("- Scrape interop metrics such as `op_supervisor_*_up`, `op_supervisor_*_refs_number`, `op_supervisor_*_access_list_verify_failure`, `op_interop_mon_*_up`, `op_interop_mon_*_message_status`, and `op_interop_mon_*_terminal_status_changes` when those services are deployed.\n")
 	write("- Use the generated Prometheus rules as templates; adjust selectors to your actual scrape labels.\n")
 	write("- Keep source-tier alerts distinct from light-node capacity alerts.\n")
 	write("- Track execution candidate lag via a scheduled doctor run or an equivalent recording rule.\n\n")
@@ -362,6 +425,10 @@ func Runbook(cfg config.Config) []byte {
 	write("1. Inspect proxyd consensus-aware backend state and ban reasons.\n2. Compare backend latest, safe, finalized, peer count, sync state, latency, and error-rate metrics.\n3. Restore at least one healthy backend immediately; for deriver/source tiers, restore redundancy before considering the incident closed.\n\n")
 	write("### ProxydBackendRequestLatencyHigh / ProxydBackendErrorRate / ProxydCLConsensusIssues\n\n")
 	write("1. Use labels such as `backend_name`, `method_name`, and `backend_group_name` to identify the affected backend and method.\n2. Check backend node logs, disk/network saturation, L1 RPC health, and output-root/local-safe agreement.\n3. Treat increases in CL ban and output-root disagreement counters as source-tier correctness incidents, not just capacity incidents.\n\n")
+	write("### OpSupervisorDown / OpSupervisorRefsMissing / OpSupervisorAccessListVerifyFailures\n\n")
+	write("1. Confirm op-supervisor is running, metrics are scraped, and the dependency-set config is loaded.\n2. Compare `local_unsafe`, `cross_unsafe`, `local_safe`, and `cross_safe` refs for every expected chain.\n3. Investigate access-list verification failures as cross-chain message correctness incidents.\n\n")
+	write("### OpInteropMonitorDown / OpInteropMonitorRiskyMessages / OpInteropMonitorTerminalStatusChanges\n\n")
+	write("1. Confirm op-interop-mon is running and connected to each configured chain RPC.\n2. Inspect message status labels for the executing and initiating chain IDs involved.\n3. Treat invalid/missing message statuses or terminal status flips as high-signal interop incidents.\n\n")
 	write("### OpNodeLowPeerCount\n\n")
 	write("1. Check P2P listen address, advertised address, firewall, and bootnodes.\n2. Confirm peer limits and discovery settings.\n3. Correlate with unsafe-head advancement and derivation health.\n\n")
 	write("### OpNodeDerivationErrors / OpNodePipelineResets\n\n")
@@ -370,7 +437,7 @@ func Runbook(cfg config.Config) []byte {
 	write("1. Compare `eth_blockNumber` on reference and candidate.\n2. Inspect candidate execution logs and disk/network saturation.\n3. Do not cut over until lag and block comparison findings are healthy.\n\n")
 
 	write("## Official References\n\n")
-	links := []string{checks.DocOPGethDeprecation, checks.DocLightNodes, checks.DocInterop, checks.DocMetrics, checks.DocProxyd}
+	links := []string{checks.DocOPGethDeprecation, checks.DocLightNodes, checks.DocInterop, checks.DocMetrics, checks.DocProxyd, checks.DocOPSupervisor, checks.DocInteropMonitor}
 	sort.Strings(links)
 	for _, link := range links {
 		write("- %s\n", link)

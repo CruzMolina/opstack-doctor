@@ -130,6 +130,54 @@ groups:
           annotations:
             description: CL/source-tier consensus counters increased. Check op-node backend health, local-safe behavior, output-root agreement, and pin candidate selection.
             summary: proxyd CL consensus issue observed
+        - alert: OpSupervisorDown
+          expr: '{__name__=~"op_supervisor_.*_up"} != 1'
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            description: op-supervisor up metric is not 1. Check process health, metrics scrape target, and supervisor dependencies.
+            summary: op-supervisor is down
+        - alert: OpSupervisorRefsMissing
+          expr: absent({__name__=~"op_supervisor_.*_refs_number"})
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            description: Supervisor refs are absent. Confirm op-supervisor metrics are enabled and tracking local/cross safety heads per dependency-set chain.
+            summary: op-supervisor refs are missing
+        - alert: OpSupervisorAccessListVerifyFailures
+          expr: increase({__name__=~"op_supervisor_.*_access_list_verify_failure"}[5m]) > 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            description: Access-list verification failures increased. Investigate cross-chain message references, dependency-set coverage, and supervisor logs.
+            summary: op-supervisor access-list verification failures observed
+        - alert: OpInteropMonitorDown
+          expr: '{__name__=~"op_interop_mon_.*_up"} != 1'
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            description: op-interop-mon up metric is not 1. Check process health and metrics scrape target.
+            summary: op-interop-mon is down
+        - alert: OpInteropMonitorRiskyMessages
+          expr: '{__name__=~"op_interop_mon_.*_message_status",status=~"invalid|missing|failed|failure|error|unknown"} > 0'
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            description: Invalid, missing, failed, error, or unknown executing-message statuses are nonzero. Investigate dependency-chain RPC health and message validation.
+            summary: op-interop-mon observed risky message status
+        - alert: OpInteropMonitorTerminalStatusChanges
+          expr: '{__name__=~"op_interop_mon_.*_terminal_status_changes"} > 0'
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            description: Terminal message status changed. Treat valid/invalid flips as high-signal interop incidents.
+            summary: op-interop-mon terminal status changes observed
         - alert: ExecutionCandidateLaggingReference
           expr: opstack_doctor_execution_candidate_lag_blocks{chain="op-mainnet"} > 4
           for: 5m
