@@ -47,7 +47,7 @@ Official references:
 Download a release archive and verify its checksum:
 
 ```sh
-VERSION=0.1.11
+VERSION=0.1.12
 OS=linux
 ARCH=amd64
 curl -L -O "https://github.com/CruzMolina/opstack-doctor/releases/download/v${VERSION}/opstack-doctor_${VERSION}_${OS}_${ARCH}.tar.gz"
@@ -67,8 +67,8 @@ go build ./cmd/opstack-doctor
 Container images are published for tagged releases:
 
 ```sh
-docker run --rm ghcr.io/cruzmolina/opstack-doctor:v0.1.11 version
-docker run --rm -v "$PWD/examples/doctor.example.yaml:/config/doctor.yaml:ro" ghcr.io/cruzmolina/opstack-doctor:v0.1.11 check --config /config/doctor.yaml
+docker run --rm ghcr.io/cruzmolina/opstack-doctor:v0.1.12 version
+docker run --rm -v "$PWD/examples/doctor.example.yaml:/config/doctor.yaml:ro" ghcr.io/cruzmolina/opstack-doctor:v0.1.12 check --config /config/doctor.yaml
 ```
 
 The main command is:
