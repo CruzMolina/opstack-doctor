@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"opstack-doctor/internal/checks"
+	"opstack-doctor/internal/completion"
 	"opstack-doctor/internal/config"
 	"opstack-doctor/internal/demo"
 	"opstack-doctor/internal/generate"
@@ -41,6 +42,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runExport(args[1:], stdout, stderr)
 	case "demo":
 		return runDemo(args[1:], stdout, stderr)
+	case "completion":
+		return runCompletion(args[1:], stdout, stderr)
 	case "-h", "--help", "help":
 		usage(stdout)
 		return 0
@@ -49,6 +52,23 @@ func run(args []string, stdout, stderr io.Writer) int {
 		usage(stderr)
 		return 2
 	}
+}
+
+func runCompletion(args []string, stdout, stderr io.Writer) int {
+	if len(args) != 1 {
+		fmt.Fprintln(stderr, "usage: opstack-doctor completion bash|zsh|fish")
+		return 2
+	}
+	data, err := completion.Script(args[0])
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	if _, err := stdout.Write(data); err != nil {
+		fmt.Fprintf(stderr, "write completion: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 func runValidate(args []string, stdout, stderr io.Writer) int {
@@ -298,6 +318,7 @@ Usage:
   opstack-doctor demo --scenario healthy|warn|fail [--output human|json|prometheus]
   opstack-doctor generate alerts --config doctor.yaml --out prometheus-rules.yaml
   opstack-doctor generate runbook --config doctor.yaml --out runbook.md
+  opstack-doctor completion bash|zsh|fish
   opstack-doctor version
 `)
 }

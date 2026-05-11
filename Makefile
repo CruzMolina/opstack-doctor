@@ -28,6 +28,7 @@ clean:
 
 demo-smoke:
 	go run ./cmd/opstack-doctor version
+	go run ./cmd/opstack-doctor completion bash >/tmp/opstack-doctor-completion.bash
 	go run ./cmd/opstack-doctor validate --config examples/doctor.example.yaml --output json >/tmp/opstack-doctor-validate-example.json
 	go run ./cmd/opstack-doctor demo --scenario healthy --output prometheus >/tmp/opstack-doctor-demo-healthy.prom
 	go run ./cmd/opstack-doctor demo --scenario warn --output json >/tmp/opstack-doctor-demo-warn.json
@@ -46,5 +47,6 @@ docker-build:
 
 docker-smoke:
 	docker run --rm $(IMAGE) version
+	docker run --rm $(IMAGE) completion fish >/tmp/opstack-doctor-docker-completion.fish
 	docker run --rm -v "$$(pwd)/examples/doctor.example.yaml:/config/doctor.yaml:ro" $(IMAGE) validate --config /config/doctor.yaml --output json >/tmp/opstack-doctor-docker-validate-example.json
 	docker run --rm $(IMAGE) demo --scenario healthy --output prometheus >/tmp/opstack-doctor-docker-demo-healthy.prom

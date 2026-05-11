@@ -84,6 +84,30 @@ op_nodes:
 	}
 }
 
+func TestRunCompletionBash(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"completion", "bash"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("completion bash code = %d, stderr = %s", code, stderr.String())
+	}
+	for _, want := range []string{"complete -F _opstack_doctor_completion opstack-doctor", "validate check export demo generate completion version help"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("completion bash output missing %q:\n%s", want, stdout.String())
+		}
+	}
+}
+
+func TestRunCompletionRejectsUnsupportedShell(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"completion", "powershell"}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("completion unsupported code = %d, want 2; stdout = %s", code, stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "unsupported shell") {
+		t.Fatalf("completion unsupported stderr = %s", stderr.String())
+	}
+}
+
 func TestRunGenerateAlertsMatchesExample(t *testing.T) {
 	outPath := filepath.Join(t.TempDir(), "prometheus-rules.example.yaml")
 	var stdout, stderr bytes.Buffer

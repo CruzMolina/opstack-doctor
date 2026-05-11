@@ -85,6 +85,14 @@ opstack-doctor validate --config doctor.yaml --output json
 opstack-doctor validate --config doctor.yaml --fail-on warn
 ```
 
+Generate shell completion scripts:
+
+```sh
+opstack-doctor completion bash
+opstack-doctor completion zsh
+opstack-doctor completion fish
+```
+
 Output modes:
 
 ```sh
@@ -166,6 +174,18 @@ The `ExecutionCandidateLaggingReference` alert assumes you run `opstack-doctor e
 See [docs/alerts.md](docs/alerts.md) for alert assumptions, doctor-exported metrics, and validation notes.
 
 See [examples/runbook.example.md](examples/runbook.example.md) for a generated runbook from the sample config.
+
+## Shell Completion
+
+Generate a completion script for your shell and install it using your normal shell completion path:
+
+```sh
+opstack-doctor completion bash > opstack-doctor.bash
+opstack-doctor completion zsh > _opstack-doctor
+opstack-doctor completion fish > opstack-doctor.fish
+```
+
+The scripts complete top-level commands, common subcommands, and supported flag values.
 
 ## Development
 
