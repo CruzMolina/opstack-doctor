@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	alertGoldenConfig = "testdata/alerts.golden.config.yaml"
-	alertGoldenFile   = "testdata/alerts.golden.yaml"
+	generatorGoldenConfig = "testdata/alerts.golden.config.yaml"
+	alertGoldenFile       = "testdata/alerts.golden.yaml"
+	runbookGoldenFile     = "testdata/runbook.golden.md"
 )
 
 func TestAlertsYAMLParsesAndContainsExpectedRules(t *testing.T) {
@@ -108,7 +109,7 @@ func TestAlertsYAMLParsesAndContainsExpectedRules(t *testing.T) {
 }
 
 func TestAlertsGolden(t *testing.T) {
-	cfg, err := config.Load(alertGoldenConfig)
+	cfg, err := config.Load(generatorGoldenConfig)
 	if err != nil {
 		t.Fatalf("load golden config: %v", err)
 	}
@@ -143,6 +144,26 @@ func TestExampleAlertYAMLParses(t *testing.T) {
 		if _, ok := findRule(parsed, alert); !ok {
 			t.Fatalf("example rules missing %s", alert)
 		}
+	}
+}
+
+func TestRunbookGolden(t *testing.T) {
+	cfg, err := config.Load(generatorGoldenConfig)
+	if err != nil {
+		t.Fatalf("load golden config: %v", err)
+	}
+	got := Runbook(cfg)
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		if err := os.WriteFile(runbookGoldenFile, got, 0o644); err != nil {
+			t.Fatalf("update runbook golden file: %v", err)
+		}
+	}
+	want, err := os.ReadFile(runbookGoldenFile)
+	if err != nil {
+		t.Fatalf("read runbook golden file: %v", err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("generated runbook differs from %s; run UPDATE_GOLDEN=1 go test ./internal/generate\n%s", runbookGoldenFile, firstDifference(want, got))
 	}
 }
 
