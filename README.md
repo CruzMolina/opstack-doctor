@@ -138,7 +138,7 @@ See [examples/deploy](examples/deploy) for a node-exporter textfile script and a
 
 Start with [examples/doctor.example.yaml](examples/doctor.example.yaml). The config expresses intended topology; `validate` checks the shape and topology intent offline, while `check` validates live behavior through read-only RPC and metrics checks.
 
-See [docs/config.md](docs/config.md) for a field-by-field schema reference.
+See [docs/config.md](docs/config.md) for a field-by-field schema reference. A generated JSON Schema is available at [examples/doctor.schema.json](examples/doctor.schema.json) and can be regenerated with `opstack-doctor generate schema --out doctor.schema.json`.
 
 For local or mocked endpoints, point `reference_rpc`, `candidate_rpc`, op-node `rpc`, and `metrics` URLs at local `httptest`, anvil-style, or fixture servers that implement the small method set used by the MVP. Tests in this repository do this and never hit public RPC endpoints.
 
@@ -160,11 +160,12 @@ The demo command starts temporary localhost RPC and metrics servers, runs the no
 - `warn`: op-geth reference, one source node, non-consensus-aware deriver proxyd, low peer count, derivation errors, follower lag.
 - `fail`: op-geth candidate, execution lag/divergence, unreachable proxyd routing, and an op-node reporting down.
 
-## Generate Alerts And Runbooks
+## Generate Artifacts
 
 ```sh
 opstack-doctor generate alerts --config doctor.yaml --out prometheus-rules.yaml
 opstack-doctor generate runbook --config doctor.yaml --out runbook.md
+opstack-doctor generate schema --out doctor.schema.json
 ```
 
 The generated alert rules are templates. They assume common metric names and scrape labels such as `node`, `role`, `ref`, and `layer`; adjust selectors to match your Prometheus labeling.
@@ -174,6 +175,8 @@ The `ExecutionCandidateLaggingReference` alert assumes you run `opstack-doctor e
 See [docs/alerts.md](docs/alerts.md) for alert assumptions, doctor-exported metrics, and validation notes.
 
 See [examples/runbook.example.md](examples/runbook.example.md) for a generated runbook from the sample config.
+
+The generated schema is static and describes the supported `doctor.yaml` shape for editor validation and config review. It does not contact endpoints and does not replace `opstack-doctor validate`, which applies the same topology checks the CLI uses.
 
 ## Shell Completion
 

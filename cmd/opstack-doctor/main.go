@@ -238,7 +238,7 @@ func runExportMetrics(args []string, stdout, stderr io.Writer) int {
 
 func runGenerate(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "missing generate subcommand: alerts or runbook")
+		fmt.Fprintln(stderr, "missing generate subcommand: alerts, runbook, or schema")
 		return 2
 	}
 	switch args[0] {
@@ -246,6 +246,8 @@ func runGenerate(args []string, stdout, stderr io.Writer) int {
 		return runGenerateAlerts(args[1:], stdout, stderr)
 	case "runbook":
 		return runGenerateRunbook(args[1:], stdout, stderr)
+	case "schema":
+		return runGenerateSchema(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "unknown generate subcommand %q\n", args[0])
 		return 2
@@ -307,6 +309,30 @@ func runGenerateRunbook(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
+func runGenerateSchema(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("generate schema", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	outPath := fs.String("out", "", "path for generated JSON Schema")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+	if *outPath == "" {
+		fmt.Fprintln(stderr, "--out is required")
+		return 2
+	}
+	data, err := generate.Schema()
+	if err != nil {
+		fmt.Fprintf(stderr, "generate schema: %v\n", err)
+		return 1
+	}
+	if err := os.WriteFile(*outPath, data, 0o644); err != nil {
+		fmt.Fprintf(stderr, "write %s: %v\n", *outPath, err)
+		return 1
+	}
+	fmt.Fprintf(stdout, "wrote %s\n", *outPath)
+	return 0
+}
+
 func usage(w io.Writer) {
 	fmt.Fprint(w, `opstack-doctor is a read-only OP Stack diagnostic CLI.
 
@@ -318,6 +344,7 @@ Usage:
   opstack-doctor demo --scenario healthy|warn|fail [--output human|json|prometheus]
   opstack-doctor generate alerts --config doctor.yaml --out prometheus-rules.yaml
   opstack-doctor generate runbook --config doctor.yaml --out runbook.md
+  opstack-doctor generate schema --out doctor.schema.json
   opstack-doctor completion bash|zsh|fish
   opstack-doctor version
 `)

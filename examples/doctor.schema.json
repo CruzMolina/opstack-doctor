@@ -1,0 +1,289 @@
+{
+  "$id": "https://github.com/CruzMolina/opstack-doctor/schema/doctor.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Read-only diagnostic configuration for OP Stack / Superchain operators. The config declares endpoint locations and intended topology; opstack-doctor validates live behavior through read-only RPC and metrics checks.",
+  "properties": {
+    "chain": {
+      "additionalProperties": false,
+      "properties": {
+        "chain_id": {
+          "description": "Expected L2 chain ID. Compared against eth_chainId on execution endpoints.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Human-readable chain name used in reports and Prometheus labels.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "chain_id"
+      ],
+      "type": "object"
+    },
+    "execution": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_rpc": {
+          "description": "HTTP(S) URL. URLs may contain credentials, but opstack-doctor redacts sensitive URL components before rendering findings.",
+          "format": "uri",
+          "pattern": "^https?://",
+          "type": "string"
+        },
+        "compare_blocks": {
+          "default": 16,
+          "description": "Number of latest common blocks to compare between reference and candidate execution clients.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "max_head_lag_blocks": {
+          "default": 4,
+          "description": "Maximum allowed candidate lag behind reference before a failure finding.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reference_rpc": {
+          "description": "HTTP(S) URL. URLs may contain credentials, but opstack-doctor redacts sensitive URL components before rendering findings.",
+          "format": "uri",
+          "pattern": "^https?://",
+          "type": "string"
+        }
+      },
+      "required": [
+        "reference_rpc",
+        "candidate_rpc"
+      ],
+      "type": "object"
+    },
+    "interop": {
+      "additionalProperties": false,
+      "description": "Basic dependency-set readiness checks. This schema and v0.x checker do not validate cross-chain messages or full interop protocol correctness.",
+      "properties": {
+        "dependencies": {
+          "description": "Chains in the configured dependency set.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "chain_id": {
+                "description": "Expected chain ID for the dependency.",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "metrics": {
+                "description": "HTTP(S) URL. URLs may contain credentials, but opstack-doctor redacts sensitive URL components before rendering findings.",
+                "format": "uri",
+                "pattern": "^https?://",
+                "type": "string"
+              },
+              "name": {
+                "description": "Human-readable dependency name.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "rpc": {
+                "description": "HTTP(S) URL. URLs may contain credentials, but opstack-doctor redacts sensitive URL components before rendering findings.",
+                "format": "uri",
+                "pattern": "^https?://",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "chain_id",
+              "rpc"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "enabled": {
+          "default": false,
+          "description": "Enables basic dependency endpoint checks.",
+          "type": "boolean"
+        },
+        "monitor": {
+          "additionalProperties": false,
+          "description": "Optional op-interop-mon metrics readiness checks.",
+          "properties": {
+            "metrics": {
+              "description": "HTTP(S) URL. URLs may contain credentials, but opstack-doctor redacts sensitive URL components before rendering findings.",
+              "format": "uri",
+              "pattern": "^https?://",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "supervisor": {
+          "additionalProperties": false,
+          "description": "Optional op-supervisor metrics readiness checks.",
+          "properties": {
+            "expected_chains": {
+              "description": "Chain IDs expected in op-supervisor refs.",
+              "items": {
+                "description": "Expected dependency-set chain ID.",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "metrics": {
+              "description": "HTTP(S) URL. URLs may contain credentials, but opstack-doctor redacts sensitive URL components before rendering findings.",
+              "format": "uri",
+              "pattern": "^https?://",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "op_nodes": {
+      "description": "Configured op-node fleet members and intended source/light/sequencer topology.",
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "follows": {
+            "description": "Name of the configured source op-node this light or sequencer node is intended to follow.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "metrics": {
+            "description": "HTTP(S) URL. URLs may contain credentials, but opstack-doctor redacts sensitive URL components before rendering findings.",
+            "format": "uri",
+            "pattern": "^https?://",
+            "type": "string"
+          },
+          "name": {
+            "description": "Unique node name used in findings and follow-source references.",
+            "minLength": 1,
+            "type": "string"
+          },
+          "role": {
+            "description": "Intended op-node role.",
+            "enum": [
+              "source",
+              "light",
+              "sequencer",
+              "standalone"
+            ],
+            "type": "string"
+          },
+          "rpc": {
+            "description": "HTTP(S) URL. URLs may contain credentials, but opstack-doctor redacts sensitive URL components before rendering findings.",
+            "format": "uri",
+            "pattern": "^https?://",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "role"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "proxyd": {
+      "additionalProperties": false,
+      "description": "Declared proxyd/routing endpoints and expected backend groups. opstack-doctor checks external RPC/metrics behavior, not private proxyd TOML.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Enables proxyd/routing topology checks.",
+          "type": "boolean"
+        },
+        "endpoints": {
+          "description": "Declared proxyd endpoints to check.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "consensus_aware": {
+                "default": false,
+                "description": "Declared operator intent that this proxyd endpoint uses consensus-aware routing.",
+                "type": "boolean"
+              },
+              "expected_backends": {
+                "description": "op-node names this proxyd endpoint is expected to route to or front.",
+                "items": {
+                  "description": "Configured op-node name.",
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "metrics": {
+                "description": "HTTP(S) URL. URLs may contain credentials, but opstack-doctor redacts sensitive URL components before rendering findings.",
+                "format": "uri",
+                "pattern": "^https?://",
+                "type": "string"
+              },
+              "name": {
+                "description": "Unique proxyd endpoint name used in findings and alert labels.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "role": {
+                "description": "Intended proxyd role.",
+                "enum": [
+                  "deriver",
+                  "edge",
+                  "general"
+                ],
+                "type": "string"
+              },
+              "rpc": {
+                "description": "HTTP(S) URL. URLs may contain credentials, but opstack-doctor redacts sensitive URL components before rendering findings.",
+                "format": "uri",
+                "pattern": "^https?://",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "role"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "thresholds": {
+      "additionalProperties": false,
+      "description": "Operator thresholds used by warning/failure checks and generated alert templates.",
+      "properties": {
+        "max_rpc_latency_seconds": {
+          "default": 2,
+          "description": "Warning threshold for observed op-node/proxyd RPC latency metrics and generated latency alert templates.",
+          "minimum": 0,
+          "type": "number"
+        },
+        "max_safe_lag_blocks": {
+          "default": 20,
+          "description": "Warning threshold for follower safe-head or RPC-head lag behind source.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "min_peer_count": {
+          "default": 1,
+          "description": "Warning threshold for op-node peer count metrics.",
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "chain",
+    "execution"
+  ],
+  "title": "opstack-doctor configuration",
+  "type": "object"
+}

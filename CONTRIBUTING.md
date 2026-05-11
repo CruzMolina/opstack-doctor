@@ -39,6 +39,12 @@ UPDATE_GOLDEN=1 go test ./internal/generate
 go run ./cmd/opstack-doctor generate runbook --config examples/doctor.example.yaml --out examples/runbook.example.md
 ```
 
+The checked-in JSON Schema should match the static schema generator. Refresh it after config-shape changes with:
+
+```sh
+go run ./cmd/opstack-doctor generate schema --out examples/doctor.schema.json
+```
+
 ## Adding Checks
 
 - Prefer honest `warn` or `info` findings over false confidence.

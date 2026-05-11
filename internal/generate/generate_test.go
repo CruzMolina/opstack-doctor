@@ -1,6 +1,7 @@
 package generate
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -147,6 +148,52 @@ func TestExampleAlertYAMLParses(t *testing.T) {
 	}
 }
 
+func TestSchemaJSONParsesAndContainsExpectedFields(t *testing.T) {
+	data, err := Schema()
+	if err != nil {
+		t.Fatalf("Schema() error = %v", err)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("generated schema JSON does not parse: %v\n%s", err, string(data))
+	}
+	if parsed["$schema"] != "https://json-schema.org/draft/2020-12/schema" {
+		t.Fatalf("unexpected schema draft: %v", parsed["$schema"])
+	}
+	props := parsed["properties"].(map[string]any)
+	for _, field := range []string{"chain", "execution", "op_nodes", "proxyd", "interop", "thresholds"} {
+		if _, ok := props[field]; !ok {
+			t.Fatalf("schema missing top-level field %q", field)
+		}
+	}
+	execution := props["execution"].(map[string]any)
+	executionProps := execution["properties"].(map[string]any)
+	if _, ok := executionProps["reference_rpc"]; !ok {
+		t.Fatalf("schema missing execution.reference_rpc")
+	}
+	opNodes := props["op_nodes"].(map[string]any)
+	opNodeItems := opNodes["items"].(map[string]any)
+	opNodeProps := opNodeItems["properties"].(map[string]any)
+	role := opNodeProps["role"].(map[string]any)
+	if !containsJSONValue(role["enum"].([]any), "source") || !containsJSONValue(role["enum"].([]any), "sequencer") {
+		t.Fatalf("op-node role enum missing expected values: %v", role["enum"])
+	}
+}
+
+func TestExampleSchemaJSONMatchesGenerator(t *testing.T) {
+	got, err := Schema()
+	if err != nil {
+		t.Fatalf("Schema() error = %v", err)
+	}
+	want, err := os.ReadFile("../../examples/doctor.schema.json")
+	if err != nil {
+		t.Fatalf("read example schema: %v", err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("generated schema differs from examples/doctor.schema.json; run go run ./cmd/opstack-doctor generate schema --out examples/doctor.schema.json\n%s", firstDifference(want, got))
+	}
+}
+
 func TestRunbookGolden(t *testing.T) {
 	cfg, err := config.Load(generatorGoldenConfig)
 	if err != nil {
@@ -165,6 +212,15 @@ func TestRunbookGolden(t *testing.T) {
 	if string(got) != string(want) {
 		t.Fatalf("generated runbook differs from %s; run UPDATE_GOLDEN=1 go test ./internal/generate\n%s", runbookGoldenFile, firstDifference(want, got))
 	}
+}
+
+func containsJSONValue(values []any, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func findRule(rules RuleFile, name string) (Rule, bool) {
