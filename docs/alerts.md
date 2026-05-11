@@ -34,6 +34,18 @@ Doctor-exported metrics used by generated rules:
 | `opstack_doctor_topology_follower_lag_blocks` | Follower lag behind its configured source from RPC heads or safe-head metrics. |
 | `opstack_doctor_proxyd_head_lag_blocks` | proxyd RPC head lag behind the latest readable declared backend. |
 
+For interop readiness, the generated `DoctorInterop*` alerts use `opstack_doctor_finding` labels from scheduled exports. This covers cases where Prometheus scrapes doctor output through node-exporter or a CronJob, even if you also scrape native op-supervisor and op-interop-mon metrics directly.
+
+Useful selectors:
+
+```promql
+opstack_doctor_finding{id=~"interop\\..*\\.(rpc|chain_id|head|metrics)",severity="warn"}
+opstack_doctor_finding{id=~"interop\\.supervisor\\.(metrics_fetch|metrics_names|up|up_missing|refs_missing|expected_chains|ref_types|access_list_verify_failure)",severity=~"warn|fail"}
+opstack_doctor_finding{id=~"interop\\.monitor\\.(metrics_fetch|metrics_names|up|up_missing|message_status_missing|message_status|terminal_status_changes)",severity=~"warn|fail"}
+```
+
+See [../examples/prometheus-export.interop.example.prom](../examples/prometheus-export.interop.example.prom) for representative exported series.
+
 ## Label Assumptions
 
 op-node metric labels vary by version and scrape configuration. Generated rules assume common labels such as:
@@ -114,6 +126,11 @@ op_interop_mon_default_terminal_status_changes
 | `OpInteropMonitorDown` | `op_interop_mon_*_up` | Detects op-interop-mon reporting down. |
 | `OpInteropMonitorRiskyMessages` | `op_interop_mon_*_message_status` | Detects invalid, missing, failed, error, or unknown message statuses. |
 | `OpInteropMonitorTerminalStatusChanges` | `op_interop_mon_*_terminal_status_changes` | Detects terminal valid/invalid status flips. |
+| `DoctorInteropDependencyReadinessWarning` | doctor export | Detects interop dependency RPC, chain ID, head, or metrics readiness warnings from scheduled doctor output. |
+| `DoctorInteropSupervisorReadinessFailed` | doctor export | Detects failing op-supervisor readiness findings from scheduled doctor output. |
+| `DoctorInteropSupervisorReadinessWarning` | doctor export | Detects warning-level op-supervisor readiness findings from scheduled doctor output. |
+| `DoctorInteropMonitorReadinessFailed` | doctor export | Detects failing op-interop-mon readiness findings from scheduled doctor output. |
+| `DoctorInteropMonitorReadinessWarning` | doctor export | Detects warning-level op-interop-mon readiness findings from scheduled doctor output. |
 | `ProxydHeadLaggingBackends` | doctor export | Detects proxyd RPC head lag behind declared backends. |
 | `LightNodeLaggingSource` | `op_node_default_refs_number` | Detects follower safe-head lag behind configured source. |
 | `ExecutionCandidateLaggingReference` | doctor export | Detects candidate execution lag. |

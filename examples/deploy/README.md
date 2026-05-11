@@ -34,4 +34,6 @@ opstack-doctor generate alerts --config doctor.yaml --out prometheus-rules.yaml
 
 The generated `ExecutionCandidateLaggingReference` alert expects the exported `opstack_doctor_execution_candidate_lag_blocks` metric from this scheduled command path.
 
+The generated `DoctorInterop*` alerts expect `opstack_doctor_finding` series from the same scheduled export path. They are useful when doctor can reach dependency, op-supervisor, or op-interop-mon endpoints but Prometheus does not scrape those internal endpoints directly. See [../prometheus-export.interop.example.prom](../prometheus-export.interop.example.prom) for representative exported interop finding series.
+
 See [../../docs/alerts.md](../../docs/alerts.md) for the full alert list, doctor-exported metrics, and label assumptions.

@@ -178,6 +178,46 @@ groups:
           annotations:
             description: Terminal message status changed. Treat valid/invalid flips as high-signal interop incidents.
             summary: op-interop-mon terminal status changes observed
+        - alert: DoctorInteropDependencyReadinessWarning
+          expr: opstack_doctor_finding{id=~"interop\\..*\\.(rpc|chain_id|head|metrics)",severity="warn"} == 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            description: A scheduled opstack-doctor export found an interop dependency RPC, chain ID, head, or metrics readiness warning. Inspect the finding id and target labels.
+            summary: interop dependency readiness warning
+        - alert: DoctorInteropSupervisorReadinessFailed
+          expr: opstack_doctor_finding{id=~"interop\\.supervisor\\.(metrics_fetch|metrics_names|up|up_missing|refs_missing|expected_chains|ref_types|access_list_verify_failure)",severity="fail"} == 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            description: A scheduled opstack-doctor export observed a failing op-supervisor readiness finding. Inspect the finding id, target, and evidence labels.
+            summary: op-supervisor readiness check failed
+        - alert: DoctorInteropSupervisorReadinessWarning
+          expr: opstack_doctor_finding{id=~"interop\\.supervisor\\.(metrics_fetch|metrics_names|up|up_missing|refs_missing|expected_chains|ref_types|access_list_verify_failure)",severity="warn"} == 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            description: A scheduled opstack-doctor export observed a warning-level op-supervisor readiness finding. Inspect expected chain coverage, refs, and access-list evidence.
+            summary: op-supervisor readiness warning
+        - alert: DoctorInteropMonitorReadinessFailed
+          expr: opstack_doctor_finding{id=~"interop\\.monitor\\.(metrics_fetch|metrics_names|up|up_missing|message_status_missing|message_status|terminal_status_changes)",severity="fail"} == 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            description: A scheduled opstack-doctor export observed a failing op-interop-mon readiness finding. Inspect process health, scrape reachability, and message status evidence.
+            summary: op-interop-mon readiness check failed
+        - alert: DoctorInteropMonitorReadinessWarning
+          expr: opstack_doctor_finding{id=~"interop\\.monitor\\.(metrics_fetch|metrics_names|up|up_missing|message_status_missing|message_status|terminal_status_changes)",severity="warn"} == 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            description: A scheduled opstack-doctor export observed a warning-level op-interop-mon readiness finding. Inspect message status and terminal status change evidence.
+            summary: op-interop-mon readiness warning
         - alert: ExecutionCandidateLaggingReference
           expr: opstack_doctor_execution_candidate_lag_blocks{chain="op-mainnet"} > 4
           for: 5m

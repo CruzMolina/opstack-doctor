@@ -1,0 +1,18 @@
+# Example subset from: opstack-doctor export metrics --config doctor.yaml
+# These series are enough to drive the DoctorInterop* generated alert templates.
+# Real output also includes summary gauges, all findings, numeric evidence, and derived execution/topology/proxyd gauges.
+
+# HELP opstack_doctor_finding Finding presence by id, target, and severity. Value is always 1 for emitted findings.
+# TYPE opstack_doctor_finding gauge
+opstack_doctor_finding{chain="op-mainnet",id="interop.base.chain_id",severity="ok",target="interop.dependencies.base.rpc"} 1
+opstack_doctor_finding{chain="op-mainnet",id="interop.base.head",severity="ok",target="interop.dependencies.base.rpc"} 1
+opstack_doctor_finding{chain="op-mainnet",id="interop.base.metrics",severity="ok",target="interop.dependencies.base.metrics"} 1
+opstack_doctor_finding{chain="op-mainnet",id="interop.supervisor.expected_chains",severity="warn",target="interop.supervisor.metrics"} 1
+opstack_doctor_finding{chain="op-mainnet",id="interop.supervisor.ref_types",severity="warn",target="interop.supervisor.metrics"} 1
+opstack_doctor_finding{chain="op-mainnet",id="interop.monitor.message_status",severity="warn",target="interop.monitor.metrics"} 1
+
+# HELP opstack_doctor_finding_evidence_value Numeric evidence values attached to findings.
+# TYPE opstack_doctor_finding_evidence_value gauge
+opstack_doctor_finding_evidence_value{chain="op-mainnet",id="interop.base.head",key="head",severity="ok",target="interop.dependencies.base.rpc"} 123456
+opstack_doctor_finding_evidence_value{chain="op-mainnet",id="interop.supervisor.ref_types",key="local_unsafe",severity="warn",target="interop.supervisor.metrics"} 100
+opstack_doctor_finding_evidence_value{chain="op-mainnet",id="interop.supervisor.ref_types",key="cross_unsafe",severity="warn",target="interop.supervisor.metrics"} 105
