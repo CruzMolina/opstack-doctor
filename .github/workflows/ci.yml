@@ -35,6 +35,9 @@ jobs:
       - name: Validate generated alert rules
         run: make promtool-check
 
+      - name: Test generated alert firing
+        run: make promtool-test
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 

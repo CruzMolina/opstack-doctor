@@ -16,7 +16,7 @@ Run the local verification suite:
 make release-check
 ```
 
-`make release-check` includes Go tests, vet, smoke checks, and Prometheus rule validation through `make promtool-check`.
+`make release-check` includes Go tests, vet, smoke checks, Prometheus rule syntax validation through `make promtool-check`, and representative alert firing tests through `make promtool-test`.
 
 `VERSION` is the release version used by Make targets and should match the tag without the leading `v`.
 

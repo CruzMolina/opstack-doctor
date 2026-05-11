@@ -1,0 +1,60 @@
+rule_files:
+  - prometheus-rules.example.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - name: doctor exported alert firing behavior
+    interval: 1m
+    input_series:
+      - series: 'opstack_doctor_finding{chain="op-mainnet",id="interop.supervisor.expected_chains",severity="warn",target="interop.supervisor.metrics"}'
+        values: '1 1 1 1 1 1 1 1'
+      - series: 'opstack_doctor_finding{chain="op-mainnet",id="interop.monitor.message_status",severity="warn",target="interop.monitor.metrics"}'
+        values: '1 1 1 1 1 1 1 1'
+      - series: 'opstack_doctor_execution_candidate_lag_blocks{chain="op-mainnet"}'
+        values: '5 5 5 5 5 5 5 5'
+      - series: 'opstack_doctor_finding{chain="op-mainnet",id="proxyd.deriver-proxyd.rpc",severity="fail",target="proxyd.deriver-proxyd.rpc"}'
+        values: '1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ProxydEndpointUnhealthy
+        exp_alerts:
+          - exp_labels:
+              chain: op-mainnet
+              id: proxyd.deriver-proxyd.rpc
+              severity: critical
+              target: proxyd.deriver-proxyd.rpc
+            exp_annotations:
+              description: opstack-doctor could not read the configured proxyd RPC endpoint or observed a chain/head failure. Requires scheduled doctor export metrics.
+              summary: proxyd endpoint failed doctor readiness checks
+      - eval_time: 6m
+        alertname: DoctorInteropSupervisorReadinessWarning
+        exp_alerts:
+          - exp_labels:
+              chain: op-mainnet
+              id: interop.supervisor.expected_chains
+              severity: warning
+              target: interop.supervisor.metrics
+            exp_annotations:
+              description: A scheduled opstack-doctor export observed a warning-level op-supervisor readiness finding. Inspect expected chain coverage, refs, and access-list evidence.
+              summary: op-supervisor readiness warning
+      - eval_time: 6m
+        alertname: DoctorInteropMonitorReadinessWarning
+        exp_alerts:
+          - exp_labels:
+              chain: op-mainnet
+              id: interop.monitor.message_status
+              severity: warning
+              target: interop.monitor.metrics
+            exp_annotations:
+              description: A scheduled opstack-doctor export observed a warning-level op-interop-mon readiness finding. Inspect message status and terminal status change evidence.
+              summary: op-interop-mon readiness warning
+      - eval_time: 6m
+        alertname: ExecutionCandidateLaggingReference
+        exp_alerts:
+          - exp_labels:
+              chain: op-mainnet
+              severity: warning
+            exp_annotations:
+              description: Template alert for lag exported by opstack-doctor check --output prometheus or opstack-doctor export metrics.
+              summary: execution candidate is lagging reference
