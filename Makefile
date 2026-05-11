@@ -1,8 +1,9 @@
 VERSION ?= $(shell cat VERSION)
 IMAGE ?= opstack-doctor:$(VERSION)
 BIN ?= opstack-doctor
+PROMTOOL_IMAGE ?= prom/prometheus:v3.7.3
 
-.PHONY: test vet fmt fmt-check version-check build clean demo-smoke release-check docker-build docker-smoke
+.PHONY: test vet fmt fmt-check version-check build clean demo-smoke promtool-check release-check docker-build docker-smoke
 
 fmt:
 	gofmt -w ./cmd ./internal
@@ -31,7 +32,10 @@ demo-smoke:
 	go run ./cmd/opstack-doctor demo --scenario warn --output json >/tmp/opstack-doctor-demo-warn.json
 	go run ./cmd/opstack-doctor demo --scenario fail --output prometheus >/tmp/opstack-doctor-demo-fail.prom
 
-release-check: fmt-check version-check test vet build demo-smoke
+promtool-check:
+	docker run --rm --entrypoint promtool -v "$$(pwd):/work:ro" --workdir /work $(PROMTOOL_IMAGE) check rules examples/prometheus-rules.example.yaml
+
+release-check: fmt-check version-check test vet build demo-smoke promtool-check
 
 docker-build:
 	docker build --build-arg VERSION=$(VERSION) -t $(IMAGE) .

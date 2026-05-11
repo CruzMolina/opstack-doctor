@@ -9,6 +9,7 @@ The project uses semantic versioning. Release tags are prefixed with `v`, for ex
 ### Added
 
 - Doctor-exported Prometheus alert templates and examples for interop dependency, op-supervisor, and op-interop-mon readiness findings.
+- `promtool` validation for checked-in generated alert rules in CI and release checks.
 
 ## 0.1.4 - 2026-05-11
 

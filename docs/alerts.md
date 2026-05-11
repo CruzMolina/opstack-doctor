@@ -145,4 +145,12 @@ The Go test suite parses generated alert YAML, the checked-in example file, and 
 go test ./internal/generate ./internal/checks
 ```
 
-This proves the YAML shape is valid for the local structs and that fixture-backed finding IDs/severities remain stable. It does not prove your Prometheus server accepts every expression after local label edits, so validate customized rules with your Prometheus tooling before deploying them.
+This proves the YAML shape is valid for the local structs and that fixture-backed finding IDs/severities remain stable.
+
+The release and CI checks also validate the checked-in generated alert rules with a pinned Prometheus `promtool` container:
+
+```sh
+make promtool-check
+```
+
+This catches PromQL syntax errors in [../examples/prometheus-rules.example.yaml](../examples/prometheus-rules.example.yaml). It does not prove your Prometheus server accepts every expression after local label edits, so validate customized rules with your own Prometheus tooling before deploying them.

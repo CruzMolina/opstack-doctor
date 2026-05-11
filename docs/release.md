@@ -16,6 +16,8 @@ Run the local verification suite:
 make release-check
 ```
 
+`make release-check` includes Go tests, vet, smoke checks, and Prometheus rule validation through `make promtool-check`.
+
 `VERSION` is the release version used by Make targets and should match the tag without the leading `v`.
 
 If Docker is available, verify the local image path too:
