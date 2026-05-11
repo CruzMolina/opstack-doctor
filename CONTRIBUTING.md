@@ -17,6 +17,15 @@ Tests should use `httptest` or local fixtures. Do not add tests that hit public 
 
 Metric regression fixtures live in [`testdata/metrics`](testdata/metrics). See [docs/metrics-fixtures.md](docs/metrics-fixtures.md) before contributing captured op-node or proxyd metrics; fixtures must be minimized and redacted before they are committed.
 
+Generated alert rules have a golden fixture in [`internal/generate/testdata`](internal/generate/testdata). If an alert generator change intentionally updates emitted YAML, refresh the fixture with:
+
+```sh
+UPDATE_GOLDEN=1 go test ./internal/generate
+make promtool-check
+```
+
+Review the golden YAML diff carefully so expression, threshold, label, duration, and annotation changes are explicit in the PR.
+
 ## Adding Checks
 
 - Prefer honest `warn` or `info` findings over false confidence.

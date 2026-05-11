@@ -33,7 +33,7 @@ demo-smoke:
 	go run ./cmd/opstack-doctor demo --scenario fail --output prometheus >/tmp/opstack-doctor-demo-fail.prom
 
 promtool-check:
-	docker run --rm --entrypoint promtool -v "$$(pwd):/work:ro" --workdir /work $(PROMTOOL_IMAGE) check rules examples/prometheus-rules.example.yaml
+	docker run --rm --entrypoint promtool -v "$$(pwd):/work:ro" --workdir /work $(PROMTOOL_IMAGE) check rules examples/prometheus-rules.example.yaml internal/generate/testdata/alerts.golden.yaml
 
 promtool-test:
 	docker run --rm --entrypoint promtool -v "$$(pwd):/work:ro" --workdir /work/examples $(PROMTOOL_IMAGE) test rules prometheus-rules.test.yaml

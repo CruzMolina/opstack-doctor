@@ -139,21 +139,27 @@ op_interop_mon_default_terminal_status_changes
 
 ## Validation
 
-The Go test suite parses generated alert YAML, the checked-in example file, and redacted metric fixtures:
+The Go test suite parses generated alert YAML, compares generated alert output against a checked-in golden file, parses the checked-in example file, and validates redacted metric fixtures:
 
 ```sh
 go test ./internal/generate ./internal/checks
 ```
 
-This proves the YAML shape is valid for the local structs and that fixture-backed finding IDs/severities remain stable.
+This proves the YAML shape is valid for the local structs, alert generator output changes are intentional, and fixture-backed finding IDs/severities remain stable.
 
-The release and CI checks also validate the checked-in generated alert rules with a pinned Prometheus `promtool` container:
+When alert generator changes are intentional, refresh the golden file and review the resulting YAML diff:
+
+```sh
+UPDATE_GOLDEN=1 go test ./internal/generate
+```
+
+The release and CI checks also validate both the checked-in example rules and the generator golden rules with a pinned Prometheus `promtool` container:
 
 ```sh
 make promtool-check
 ```
 
-This catches PromQL syntax errors in [../examples/prometheus-rules.example.yaml](../examples/prometheus-rules.example.yaml).
+This catches PromQL syntax errors in [../examples/prometheus-rules.example.yaml](../examples/prometheus-rules.example.yaml) and [../internal/generate/testdata/alerts.golden.yaml](../internal/generate/testdata/alerts.golden.yaml).
 
 Representative firing behavior is covered by `promtool test rules` fixtures:
 

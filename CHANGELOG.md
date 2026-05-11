@@ -8,6 +8,7 @@ The project uses semantic versioning. Release tags are prefixed with `v`, for ex
 
 ### Added
 
+- Golden-file regression coverage for generated alert YAML, including an `UPDATE_GOLDEN=1` refresh workflow and `promtool` validation of the golden output.
 - Negative `promtool test rules` cases proving representative generated alerts stay quiet for healthy doctor-exported and native interop inputs.
 
 ## 0.1.7 - 2026-05-11
