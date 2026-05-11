@@ -58,3 +58,55 @@ tests:
             exp_annotations:
               description: Template alert for lag exported by opstack-doctor check --output prometheus or opstack-doctor export metrics.
               summary: execution candidate is lagging reference
+
+  - name: native interop alert firing behavior
+    interval: 1m
+    input_series:
+      - series: 'op_supervisor_default_up{instance="supervisor-1"}'
+        values: '0 0 0 0 0 0 0 0'
+      - series: 'op_supervisor_default_access_list_verify_failure{chain="10"}'
+        values: '0 0 0 1 1 1 2 2'
+      - series: 'op_interop_mon_default_message_status{executing_chain_id="10",initiating_chain_id="8453",status="invalid"}'
+        values: '2 2 2 2 2 2 2 2'
+      - series: 'op_interop_mon_default_terminal_status_changes{executing_chain_id="10",initiating_chain_id="8453"}'
+        values: '1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: OpSupervisorDown
+        exp_alerts:
+          - exp_labels:
+              instance: supervisor-1
+              severity: critical
+            exp_annotations:
+              description: op-supervisor up metric is not 1. Check process health, metrics scrape target, and supervisor dependencies.
+              summary: op-supervisor is down
+      - eval_time: 7m
+        alertname: OpSupervisorAccessListVerifyFailures
+        exp_alerts:
+          - exp_labels:
+              chain: "10"
+              severity: warning
+            exp_annotations:
+              description: Access-list verification failures increased. Investigate cross-chain message references, dependency-set coverage, and supervisor logs.
+              summary: op-supervisor access-list verification failures observed
+      - eval_time: 2m
+        alertname: OpInteropMonitorRiskyMessages
+        exp_alerts:
+          - exp_labels:
+              executing_chain_id: "10"
+              initiating_chain_id: "8453"
+              severity: warning
+              status: invalid
+            exp_annotations:
+              description: Invalid, missing, failed, error, or unknown executing-message statuses are nonzero. Investigate dependency-chain RPC health and message validation.
+              summary: op-interop-mon observed risky message status
+      - eval_time: 2m
+        alertname: OpInteropMonitorTerminalStatusChanges
+        exp_alerts:
+          - exp_labels:
+              executing_chain_id: "10"
+              initiating_chain_id: "8453"
+              severity: warning
+            exp_annotations:
+              description: Terminal message status changed. Treat valid/invalid flips as high-signal interop incidents.
+              summary: op-interop-mon terminal status changes observed
