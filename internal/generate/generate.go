@@ -255,6 +255,56 @@ func Alerts(cfg config.Config) ([]byte, error) {
 			},
 		},
 		{
+			Alert:  "DoctorInteropDependencyReadinessWarning",
+			Expr:   "opstack_doctor_finding{id=~\"interop\\\\..*\\\\.(rpc|chain_id|head|metrics)\",severity=\"warn\"} == 1",
+			For:    "5m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "interop dependency readiness warning",
+				"description": "A scheduled opstack-doctor export found an interop dependency RPC, chain ID, head, or metrics readiness warning. Inspect the finding id and target labels.",
+			},
+		},
+		{
+			Alert:  "DoctorInteropSupervisorReadinessFailed",
+			Expr:   "opstack_doctor_finding{id=~\"interop\\\\.supervisor\\\\.(metrics_fetch|metrics_names|up|up_missing|refs_missing|expected_chains|ref_types|access_list_verify_failure)\",severity=\"fail\"} == 1",
+			For:    "2m",
+			Labels: map[string]string{"severity": "critical"},
+			Annotations: map[string]string{
+				"summary":     "op-supervisor readiness check failed",
+				"description": "A scheduled opstack-doctor export observed a failing op-supervisor readiness finding. Inspect the finding id, target, and evidence labels.",
+			},
+		},
+		{
+			Alert:  "DoctorInteropSupervisorReadinessWarning",
+			Expr:   "opstack_doctor_finding{id=~\"interop\\\\.supervisor\\\\.(metrics_fetch|metrics_names|up|up_missing|refs_missing|expected_chains|ref_types|access_list_verify_failure)\",severity=\"warn\"} == 1",
+			For:    "5m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "op-supervisor readiness warning",
+				"description": "A scheduled opstack-doctor export observed a warning-level op-supervisor readiness finding. Inspect expected chain coverage, refs, and access-list evidence.",
+			},
+		},
+		{
+			Alert:  "DoctorInteropMonitorReadinessFailed",
+			Expr:   "opstack_doctor_finding{id=~\"interop\\\\.monitor\\\\.(metrics_fetch|metrics_names|up|up_missing|message_status_missing|message_status|terminal_status_changes)\",severity=\"fail\"} == 1",
+			For:    "2m",
+			Labels: map[string]string{"severity": "critical"},
+			Annotations: map[string]string{
+				"summary":     "op-interop-mon readiness check failed",
+				"description": "A scheduled opstack-doctor export observed a failing op-interop-mon readiness finding. Inspect process health, scrape reachability, and message status evidence.",
+			},
+		},
+		{
+			Alert:  "DoctorInteropMonitorReadinessWarning",
+			Expr:   "opstack_doctor_finding{id=~\"interop\\\\.monitor\\\\.(metrics_fetch|metrics_names|up|up_missing|message_status_missing|message_status|terminal_status_changes)\",severity=\"warn\"} == 1",
+			For:    "5m",
+			Labels: map[string]string{"severity": "warning"},
+			Annotations: map[string]string{
+				"summary":     "op-interop-mon readiness warning",
+				"description": "A scheduled opstack-doctor export observed a warning-level op-interop-mon readiness finding. Inspect message status and terminal status change evidence.",
+			},
+		},
+		{
 			Alert:  "ExecutionCandidateLaggingReference",
 			Expr:   fmt.Sprintf("opstack_doctor_execution_candidate_lag_blocks{chain=%q} > %d", cfg.Chain.Name, cfg.Execution.MaxHeadLagBlocks),
 			For:    "5m",

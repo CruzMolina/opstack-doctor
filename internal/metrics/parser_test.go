@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -30,5 +32,20 @@ escaped_label{path="a\"b\\c"} 2
 	latency := FindPrefix(samples, "op_node_default_rpc_client_request_duration_seconds")
 	if len(latency) != 1 {
 		t.Fatalf("latency prefix len = %d", len(latency))
+	}
+}
+
+func TestPrometheusExportInteropExampleParses(t *testing.T) {
+	path := filepath.Join("..", "..", "examples", "prometheus-export.interop.example.prom")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read example: %v", err)
+	}
+	samples, err := ParseText(strings.NewReader(string(data)))
+	if err != nil {
+		t.Fatalf("ParseText(example) error = %v", err)
+	}
+	if len(samples) == 0 {
+		t.Fatalf("example should contain parseable samples")
 	}
 }

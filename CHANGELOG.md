@@ -4,6 +4,12 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
+## 0.1.5 - Unreleased
+
+### Added
+
+- Doctor-exported Prometheus alert templates and examples for interop dependency, op-supervisor, and op-interop-mon readiness findings.
+
 ## 0.1.4 - 2026-05-11
 
 ### Added

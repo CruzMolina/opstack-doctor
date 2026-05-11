@@ -110,6 +110,8 @@ This is equivalent to `check --output prometheus`. It emits generic finding gaug
 - `opstack_doctor_topology_follower_lag_blocks`
 - `opstack_doctor_proxyd_head_lag_blocks`
 
+Interop readiness alerts can also use exported `opstack_doctor_finding` series from scheduled runs. See [examples/prometheus-export.interop.example.prom](examples/prometheus-export.interop.example.prom) for representative dependency, op-supervisor, and op-interop-mon finding labels.
+
 Run this from a cron job, Kubernetes `CronJob`, or sidecar-style wrapper and expose the output through your normal textfile/scrape path.
 
 See [examples/deploy](examples/deploy) for a node-exporter textfile script and a Kubernetes CronJob template.
