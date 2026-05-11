@@ -15,7 +15,7 @@ import (
 	"opstack-doctor/internal/report"
 )
 
-var version = "0.1.6"
+var version = "0.1.7"
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
