@@ -14,6 +14,8 @@ opstack-doctor generate schema --out doctor.schema.json
 
 The checked-in example schema is [examples/doctor.schema.json](../examples/doctor.schema.json). The schema describes the supported YAML shape, required fields, enum values, defaults, and URL formats. It is static and does not contact endpoints; use `opstack-doctor validate --config doctor.yaml` for offline topology validation.
 
+The release checks run `make schema-check`, which validates the sample config and intentionally invalid fixtures against the checked-in schema. This keeps the operator-facing config contract aligned with examples and docs.
+
 ## Top-Level Fields
 
 | Field | Type | Required | Description |

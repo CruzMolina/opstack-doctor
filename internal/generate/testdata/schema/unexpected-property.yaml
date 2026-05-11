@@ -1,0 +1,8 @@
+chain:
+  name: op-mainnet
+  chain_id: 10
+  network: optimism
+
+execution:
+  reference_rpc: "http://op-geth.example.invalid"
+  candidate_rpc: "http://op-reth.example.invalid"

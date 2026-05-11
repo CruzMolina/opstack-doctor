@@ -178,6 +178,8 @@ See [examples/runbook.example.md](examples/runbook.example.md) for a generated r
 
 The generated schema is static and describes the supported `doctor.yaml` shape for editor validation and config review. It does not contact endpoints and does not replace `opstack-doctor validate`, which applies the same topology checks the CLI uses.
 
+CI treats the schema as a contract: `make schema-check` validates the checked-in example config and negative fixtures against [examples/doctor.schema.json](examples/doctor.schema.json).
+
 ## Shell Completion
 
 Generate a completion script for your shell and install it using your normal shell completion path:
