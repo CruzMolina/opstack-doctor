@@ -1,0 +1,6 @@
+# Redacted op-interop-mon fixture: monitor down and risky executing-message status.
+op_interop_mon_default_up 0
+op_interop_mon_default_message_status{executing_chain_id="10",initiating_chain_id="8453",status="valid"} 3
+op_interop_mon_default_message_status{executing_chain_id="10",initiating_chain_id="8453",status="invalid"} 2
+op_interop_mon_default_message_status{executing_chain_id="10",initiating_chain_id="8453",status="missing"} 1
+op_interop_mon_default_terminal_status_changes{executing_chain_id="10",initiating_chain_id="8453"} 1

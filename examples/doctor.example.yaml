@@ -50,6 +50,13 @@ proxyd:
 
 interop:
   enabled: true
+  supervisor:
+    metrics: "http://op-supervisor.example.invalid:7300/metrics"
+    expected_chains:
+      - 10
+      - 8453
+  monitor:
+    metrics: "http://op-interop-mon.example.invalid:7300/metrics"
   dependencies:
     - name: base
       chain_id: 8453

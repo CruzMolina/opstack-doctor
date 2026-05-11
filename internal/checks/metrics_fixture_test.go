@@ -189,6 +189,103 @@ func TestOPNodeMetricFixtures(t *testing.T) {
 	}
 }
 
+func TestInteropSupervisorMetricFixtures(t *testing.T) {
+	cfg := config.Config{
+		Chain: config.ChainConfig{Name: "op-mainnet", ChainID: 10},
+		Interop: config.InteropConfig{
+			Enabled: true,
+			Supervisor: config.InteropSupervisorConfig{
+				ExpectedChains: []uint64{10, 8453},
+			},
+			Dependencies: []config.DependencyConfig{{Name: "base", ChainID: 8453}},
+		},
+	}
+	tests := []struct {
+		name             string
+		fixture          string
+		want             map[string]report.Severity
+		wantNoWarnOrFail bool
+	}{
+		{
+			name:             "healthy supervisor",
+			fixture:          "op-supervisor-healthy.prom",
+			wantNoWarnOrFail: true,
+			want: map[string]report.Severity{
+				"interop.supervisor.up":                         report.SeverityOK,
+				"interop.supervisor.info":                       report.SeverityOK,
+				"interop.supervisor.refs":                       report.SeverityOK,
+				"interop.supervisor.expected_chains":            report.SeverityOK,
+				"interop.supervisor.ref_types":                  report.SeverityOK,
+				"interop.supervisor.access_list_verify_failure": report.SeverityOK,
+				"interop.supervisor.logdb_entries":              report.SeverityOK,
+				"interop.supervisor.rpc_metrics":                report.SeverityOK,
+			},
+		},
+		{
+			name:    "risky supervisor",
+			fixture: "op-supervisor-risk.prom",
+			want: map[string]report.Severity{
+				"interop.supervisor.up":                         report.SeverityFail,
+				"interop.supervisor.refs":                       report.SeverityOK,
+				"interop.supervisor.expected_chains":            report.SeverityWarn,
+				"interop.supervisor.ref_types":                  report.SeverityWarn,
+				"interop.supervisor.access_list_verify_failure": report.SeverityWarn,
+				"interop.supervisor.logdb_entries_missing":      report.SeverityInfo,
+				"interop.supervisor.rpc_metrics_missing":        report.SeverityInfo,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			findings := checkSupervisorMetricSamples(cfg, loadMetricFixture(t, tt.fixture))
+			assertFindingSeverities(t, findings, tt.want)
+			if tt.wantNoWarnOrFail {
+				assertNoWarnOrFail(t, findings)
+			}
+		})
+	}
+}
+
+func TestInteropMonitorMetricFixtures(t *testing.T) {
+	tests := []struct {
+		name             string
+		fixture          string
+		want             map[string]report.Severity
+		wantNoWarnOrFail bool
+	}{
+		{
+			name:             "healthy monitor",
+			fixture:          "op-interop-mon-healthy.prom",
+			wantNoWarnOrFail: true,
+			want: map[string]report.Severity{
+				"interop.monitor.up":                      report.SeverityOK,
+				"interop.monitor.message_status":          report.SeverityOK,
+				"interop.monitor.terminal_status_changes": report.SeverityOK,
+				"interop.monitor.block_ranges":            report.SeverityOK,
+			},
+		},
+		{
+			name:    "risky monitor",
+			fixture: "op-interop-mon-risk.prom",
+			want: map[string]report.Severity{
+				"interop.monitor.up":                      report.SeverityFail,
+				"interop.monitor.message_status":          report.SeverityWarn,
+				"interop.monitor.terminal_status_changes": report.SeverityWarn,
+				"interop.monitor.block_ranges_missing":    report.SeverityInfo,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			findings := checkInteropMonitorMetricSamples(loadMetricFixture(t, tt.fixture))
+			assertFindingSeverities(t, findings, tt.want)
+			if tt.wantNoWarnOrFail {
+				assertNoWarnOrFail(t, findings)
+			}
+		})
+	}
+}
+
 func loadMetricFixture(t *testing.T, name string) []metrics.Sample {
 	t.Helper()
 	path := filepath.Join("..", "..", "testdata", "metrics", name)

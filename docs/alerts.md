@@ -77,6 +77,17 @@ proxyd_backend_error_rate
 proxyd_rpc_backend_request_duration_seconds
 ```
 
+Interop metric labels are still evolving. Generated op-supervisor and op-interop-mon alert templates use regex metric names so they work with process-specific namespaces such as `op_supervisor_default` or `op_interop_mon_default`. Before production use, compare against series such as:
+
+```promql
+op_supervisor_default_up
+op_supervisor_default_refs_number
+op_supervisor_default_access_list_verify_failure
+op_interop_mon_default_up
+op_interop_mon_default_message_status
+op_interop_mon_default_terminal_status_changes
+```
+
 ## Generated Alerts
 
 | Alert | Source metric family | Purpose |
@@ -97,6 +108,12 @@ proxyd_rpc_backend_request_duration_seconds
 | `ProxydBackendRequestLatencyHigh` | `proxyd_rpc_backend_request_duration_seconds` | Detects high proxyd backend latency quantiles. |
 | `ProxydBackendErrorRate` | `proxyd_backend_error_rate` | Detects nonzero proxyd backend error-rate gauges. |
 | `ProxydCLConsensusIssues` | proxyd CL/source-tier consensus counters | Detects source-tier consensus ban, output-root disagreement, or pin-candidate counter increases. |
+| `OpSupervisorDown` | `op_supervisor_*_up` | Detects op-supervisor reporting down. |
+| `OpSupervisorRefsMissing` | `op_supervisor_*_refs_number` | Detects missing supervisor local/cross safety refs. |
+| `OpSupervisorAccessListVerifyFailures` | `op_supervisor_*_access_list_verify_failure` | Detects access-list verification failure counter increases. |
+| `OpInteropMonitorDown` | `op_interop_mon_*_up` | Detects op-interop-mon reporting down. |
+| `OpInteropMonitorRiskyMessages` | `op_interop_mon_*_message_status` | Detects invalid, missing, failed, error, or unknown message statuses. |
+| `OpInteropMonitorTerminalStatusChanges` | `op_interop_mon_*_terminal_status_changes` | Detects terminal valid/invalid status flips. |
 | `ProxydHeadLaggingBackends` | doctor export | Detects proxyd RPC head lag behind declared backends. |
 | `LightNodeLaggingSource` | `op_node_default_refs_number` | Detects follower safe-head lag behind configured source. |
 | `ExecutionCandidateLaggingReference` | doctor export | Detects candidate execution lag. |

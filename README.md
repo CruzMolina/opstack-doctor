@@ -29,13 +29,13 @@ Official references:
 - op-node Prometheus metrics, including `op_node_default_up`, refs, peer counts, derivation errors, pipeline resets, and RPC client latency metric presence.
 - Light/sequencer follower lag against configured source nodes using available RPC and parseable safe-head metrics.
 - proxyd/routing readiness for declared deriver and edge endpoints: consensus-aware intent, RPC/metrics reachability, expected backend roles, head lag against readable backends, and native proxyd health metrics such as `proxyd_up`, backend probes, consensus counts, degraded/banned backends, backend error rate, CL consensus counters, and backend latency.
-- Basic interop dependency RPC, chain ID, block-number, and metrics reachability.
+- Basic interop dependency RPC, chain ID, block-number, dependency metrics reachability, optional op-supervisor metrics readiness, and optional op-interop-mon message-monitor metrics readiness.
 - Prometheus alert-rule and Markdown runbook generation.
 
 ## What It Does Not Check Yet
 
 - Full interop protocol correctness or cross-chain message validation.
-- op-supervisor-specific behavior or metrics.
+- op-supervisor protocol correctness or private dependency-set discovery.
 - Actual deployed CLI flags unless represented in the config.
 - Private proxyd TOML introspection or proof that a live proxyd process is using every declared backend.
 - Every proxyd metric variant across every deployed version; missing version-specific proxyd metrics are reported conservatively.
@@ -178,7 +178,7 @@ Apache-2.0. See [LICENSE](LICENSE).
 ## Roadmap
 
 - Deeper op-reth/op-geth RPC comparison.
-- op-supervisor and interop-specific metrics.
+- Deeper op-supervisor and interop-specific metrics.
 - proxyd metric version matrix and richer consensus-aware routing diagnostics.
 - Grafana dashboard generation.
 - Dependency-set config discovery.

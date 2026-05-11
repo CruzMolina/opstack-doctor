@@ -1,0 +1,8 @@
+# Redacted op-supervisor fixture: unhealthy process, missing chain refs, invalid ordering, and access-list failures.
+op_supervisor_default_up 0
+op_supervisor_default_info{version="v1.0.0-redacted"} 1
+op_supervisor_default_refs_number{layer="l2",type="local_unsafe",chain="10"} 100
+op_supervisor_default_refs_number{layer="l2",type="cross_unsafe",chain="10"} 105
+op_supervisor_default_refs_number{layer="l2",type="local_safe",chain="10"} 90
+op_supervisor_default_refs_number{layer="l2",type="cross_safe",chain="10"} 95
+op_supervisor_default_access_list_verify_failure{chain="10"} 3

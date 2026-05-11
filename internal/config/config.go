@@ -54,8 +54,19 @@ type ProxydEndpointConfig struct {
 }
 
 type InteropConfig struct {
-	Enabled      bool               `yaml:"enabled" json:"enabled"`
-	Dependencies []DependencyConfig `yaml:"dependencies" json:"dependencies"`
+	Enabled      bool                    `yaml:"enabled" json:"enabled"`
+	Dependencies []DependencyConfig      `yaml:"dependencies" json:"dependencies"`
+	Supervisor   InteropSupervisorConfig `yaml:"supervisor" json:"supervisor"`
+	Monitor      InteropMonitorConfig    `yaml:"monitor" json:"monitor"`
+}
+
+type InteropSupervisorConfig struct {
+	Metrics        string   `yaml:"metrics" json:"metrics"`
+	ExpectedChains []uint64 `yaml:"expected_chains" json:"expected_chains"`
+}
+
+type InteropMonitorConfig struct {
+	Metrics string `yaml:"metrics" json:"metrics"`
 }
 
 type DependencyConfig struct {
@@ -230,6 +241,13 @@ func (c Config) Validate() []ValidationIssue {
 	}
 
 	if c.Interop.Enabled {
+		validateURLField(&issues, "interop.supervisor.metrics", c.Interop.Supervisor.Metrics, false)
+		for i, chainID := range c.Interop.Supervisor.ExpectedChains {
+			if chainID == 0 {
+				add("fail", fmt.Sprintf("interop.supervisor.expected_chains[%d]", i), "expected chain_id must be nonzero")
+			}
+		}
+		validateURLField(&issues, "interop.monitor.metrics", c.Interop.Monitor.Metrics, false)
 		for i, dep := range c.Interop.Dependencies {
 			prefix := fmt.Sprintf("interop.dependencies[%d]", i)
 			if strings.TrimSpace(dep.Name) == "" {

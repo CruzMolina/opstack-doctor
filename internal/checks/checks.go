@@ -23,6 +23,8 @@ const (
 	DocInterop           = "https://docs.optimism.io/op-stack/interop/explainer"
 	DocMetrics           = "https://docs.optimism.io/node-operators/guides/monitoring/metrics"
 	DocProxyd            = "https://docs.optimism.io/operators/chain-operators/tools/proxyd"
+	DocOPSupervisor      = "https://github.com/ethereum-optimism/optimism/tree/develop/op-supervisor"
+	DocInteropMonitor    = "https://github.com/ethereum-optimism/optimism/tree/develop/op-interop-mon"
 )
 
 type Runner struct {
@@ -925,6 +927,97 @@ func limitSamples(samples []metrics.Sample, n int) []metrics.Sample {
 	return samples[:n]
 }
 
+func findMetricSuffix(samples []metrics.Sample, prefix, suffix string) []metrics.Sample {
+	var out []metrics.Sample
+	for _, sample := range samples {
+		if strings.HasPrefix(sample.Name, prefix+"_") && strings.HasSuffix(sample.Name, suffix) {
+			out = append(out, sample)
+		}
+	}
+	return out
+}
+
+func findMetricContains(samples []metrics.Sample, prefix string, parts ...string) []metrics.Sample {
+	var out []metrics.Sample
+	for _, sample := range samples {
+		if !strings.HasPrefix(sample.Name, prefix+"_") {
+			continue
+		}
+		for _, part := range parts {
+			if strings.Contains(sample.Name, part) {
+				out = append(out, sample)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func samplesIncludeLabelValue(samples []metrics.Sample, value string, keys ...string) bool {
+	for _, sample := range samples {
+		if metrics.LabelValue(sample, keys...) == value {
+			return true
+		}
+	}
+	return false
+}
+
+func maxRefSampleValue(samples []metrics.Sample, refType string) (float64, bool) {
+	var matched []metrics.Sample
+	for _, sample := range samples {
+		if metrics.LabelValue(sample, "type", "ref", "ref_name") == refType {
+			matched = append(matched, sample)
+		}
+	}
+	return metrics.MaxValue(matched)
+}
+
+func messageStatusRiskSamples(samples []metrics.Sample) []metrics.Sample {
+	var out []metrics.Sample
+	riskTokens := []string{"invalid", "missing", "failed", "failure", "error", "unknown"}
+	for _, sample := range samples {
+		if sample.Value <= 0 {
+			continue
+		}
+		status := strings.ToLower(metrics.LabelValue(sample, "status"))
+		for _, token := range riskTokens {
+			if strings.Contains(status, token) {
+				out = append(out, sample)
+				break
+			}
+		}
+	}
+	return out
+}
+
+func expectedInteropChains(cfg config.Config) []uint64 {
+	seen := map[uint64]struct{}{}
+	var out []uint64
+	add := func(chainID uint64) {
+		if chainID == 0 {
+			return
+		}
+		if _, ok := seen[chainID]; ok {
+			return
+		}
+		seen[chainID] = struct{}{}
+		out = append(out, chainID)
+	}
+	add(cfg.Chain.ChainID)
+	for _, dep := range cfg.Interop.Dependencies {
+		add(dep.ChainID)
+	}
+	return out
+}
+
+func joinUint64s(values []uint64) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, fmt.Sprintf("%d", value))
+	}
+	return strings.Join(parts, ",")
+}
+
 func (r Runner) checkProxydBackends(ctx context.Context, cfg config.Config, endpoint config.ProxydEndpointConfig, nodes map[string]config.OPNodeConfig, probe proxydEndpointProbe) []report.Finding {
 	target := proxydTarget(endpoint)
 	if len(endpoint.ExpectedBackends) == 0 {
@@ -1032,8 +1125,10 @@ func (r Runner) checkInterop(ctx context.Context, cfg config.Config) []report.Fi
 		return []report.Finding{finding("interop.disabled", "Interop readiness checks disabled", report.SeverityInfo, "interop", "interop.enabled=false", "Enable interop checks when this node participates in an interop dependency set.", []string{DocInterop}, nil)}
 	}
 	findings := []report.Finding{
-		finding("interop.scope", "Interop check scope is basic", report.SeverityInfo, "interop", "checking dependency endpoint reachability, chain ID, block number, and metrics only", "This MVP does not validate cross-chain message execution, op-supervisor behavior, or full interop protocol correctness.", []string{DocInterop}, nil),
+		finding("interop.scope", "Interop check scope is basic", report.SeverityInfo, "interop", "checking dependency endpoint reachability, chain ID, block number, and metrics only", "This MVP does not validate cross-chain message execution, op-supervisor behavior, or full interop protocol correctness.", []string{DocInterop, DocOPSupervisor, DocInteropMonitor}, nil),
 	}
+	findings = append(findings, r.checkInteropSupervisorMetrics(ctx, cfg)...)
+	findings = append(findings, r.checkInteropMonitorMetrics(ctx, cfg)...)
 	if len(cfg.Interop.Dependencies) == 0 {
 		findings = append(findings, finding("interop.dependencies", "No interop dependencies configured", report.SeverityWarn, "interop.dependencies", "dependency set is empty", "Configure every chain in the dependency set so operators can observe and follow each dependency.", []string{DocInterop}, nil))
 		return findings
@@ -1069,6 +1164,191 @@ func (r Runner) checkInterop(ctx context.Context, cfg config.Config) []report.Fi
 		} else {
 			findings = append(findings, finding("interop."+dep.Name+".metrics", "Dependency metrics are reachable", report.SeverityOK, target+".metrics", fmt.Sprintf("%d metric samples parsed", len(samples)), "Add dependency-set dashboards and alerts before enabling production interop flows.", []string{DocInterop, DocMetrics}, map[string]string{"metrics": redact.URL(dep.Metrics)}))
 		}
+	}
+	return findings
+}
+
+func (r Runner) checkInteropSupervisorMetrics(ctx context.Context, cfg config.Config) []report.Finding {
+	target := "interop.supervisor.metrics"
+	if strings.TrimSpace(cfg.Interop.Supervisor.Metrics) == "" {
+		return []report.Finding{finding("interop.supervisor.metrics_endpoint", "op-supervisor metrics endpoint is not configured", report.SeverityInfo, target, "metrics URL is empty", "Configure op-supervisor Prometheus metrics when this operator runs op-supervisor; this check is optional because interop rollout patterns are still evolving.", []string{DocInterop, DocOPSupervisor, DocMetrics}, nil)}
+	}
+	samples, err := r.fetchMetrics(ctx, cfg.Interop.Supervisor.Metrics)
+	if err != nil {
+		return []report.Finding{finding("interop.supervisor.metrics_fetch", "op-supervisor metrics fetch failed", report.SeverityWarn, target, err.Error(), "Check the op-supervisor metrics listener, scrape path, and network policy.", []string{DocOPSupervisor, DocMetrics}, map[string]string{"metrics": redact.URL(cfg.Interop.Supervisor.Metrics)})}
+	}
+	findings := []report.Finding{finding("interop.supervisor.metrics_fetch", "op-supervisor metrics fetched", report.SeverityOK, target, fmt.Sprintf("%d metric samples parsed", len(samples)), "Use these metrics to observe interop safety heads and supervisor health.", []string{DocOPSupervisor, DocMetrics}, map[string]string{"metrics": redact.URL(cfg.Interop.Supervisor.Metrics)})}
+	supervisorSeries := countMetricPrefix(samples, "op_supervisor")
+	if supervisorSeries == 0 {
+		findings = append(findings, finding("interop.supervisor.metrics_names", "op-supervisor metric names were not detected", report.SeverityWarn, target, "no parsed metric name started with op_supervisor", "Confirm the endpoint belongs to op-supervisor and that metrics are enabled.", []string{DocOPSupervisor, DocMetrics}, map[string]string{"samples": fmt.Sprintf("%d", len(samples))}))
+		return findings
+	}
+	findings = append(findings, finding("interop.supervisor.metrics_names", "op-supervisor metric names are present", report.SeverityOK, target, fmt.Sprintf("%d op-supervisor metric samples parsed", supervisorSeries), "No action needed.", []string{DocOPSupervisor, DocMetrics}, map[string]string{"op_supervisor_samples": fmt.Sprintf("%d", supervisorSeries)}))
+	findings = append(findings, checkSupervisorMetricSamples(cfg, samples)...)
+	return findings
+}
+
+func checkSupervisorMetricSamples(cfg config.Config, samples []metrics.Sample) []report.Finding {
+	target := "interop.supervisor.metrics"
+	var findings []report.Finding
+
+	up := findMetricSuffix(samples, "op_supervisor", "_up")
+	switch {
+	case len(up) == 0:
+		findings = append(findings, finding("interop.supervisor.up_missing", "op-supervisor up metric is missing", report.SeverityWarn, target, "op_supervisor_*_up was not present", "Expose the op-supervisor up metric so scrape reachability can be distinguished from process readiness.", []string{DocOPSupervisor, DocMetrics}, nil))
+	case anyValueNot(up, 1):
+		findings = append(findings, finding("interop.supervisor.up", "op-supervisor reports not up", report.SeverityFail, target, "op_supervisor_*_up is not 1 for every series", "Investigate op-supervisor process health and metrics wiring before depending on interop safety signals.", []string{DocOPSupervisor, DocMetrics}, map[string]string{"series": formatSeries(up)}))
+	default:
+		findings = append(findings, finding("interop.supervisor.up", "op-supervisor reports up", report.SeverityOK, target, "op_supervisor_*_up=1", "No action needed.", []string{DocOPSupervisor, DocMetrics}, map[string]string{"series": formatSeries(up)}))
+	}
+
+	info := findMetricSuffix(samples, "op_supervisor", "_info")
+	if len(info) == 0 {
+		findings = append(findings, finding("interop.supervisor.info_missing", "op-supervisor info metric is missing", report.SeverityInfo, target, "op_supervisor_*_info was not present", "Expose the info pseudo-metric where available to identify deployed versions in dashboards.", []string{DocOPSupervisor, DocMetrics}, nil))
+	} else {
+		findings = append(findings, finding("interop.supervisor.info", "op-supervisor info metric present", report.SeverityOK, target, "op_supervisor_*_info was present", "Use this to correlate interop metrics with deployed versions.", []string{DocOPSupervisor, DocMetrics}, map[string]string{"series": formatSeries(limitSamples(info, 4))}))
+	}
+
+	refs := findMetricSuffix(samples, "op_supervisor", "_refs_number")
+	if len(refs) == 0 {
+		findings = append(findings, finding("interop.supervisor.refs_missing", "op-supervisor refs metric is missing", report.SeverityWarn, target, "op_supervisor_*_refs_number was not present", "Expose supervisor refs to observe local/cross unsafe and safe heads for every dependency-set chain.", []string{DocInterop, DocOPSupervisor, DocMetrics}, nil))
+	} else {
+		findings = append(findings, finding("interop.supervisor.refs", "op-supervisor refs metric present", report.SeverityOK, target, "op_supervisor_*_refs_number was present", "Track local and cross safety heads per chain.", []string{DocInterop, DocOPSupervisor, DocMetrics}, map[string]string{"series": formatSeries(limitSamples(refs, 8))}))
+		findings = append(findings, checkSupervisorExpectedChains(cfg, refs)...)
+		findings = append(findings, checkSupervisorRefTypes(refs)...)
+	}
+
+	accessFailures := findMetricSuffix(samples, "op_supervisor", "_access_list_verify_failure")
+	if len(accessFailures) == 0 {
+		findings = append(findings, finding("interop.supervisor.access_list_verify_failure_missing", "op-supervisor access-list failure metric is missing", report.SeverityInfo, target, "op_supervisor_*_access_list_verify_failure was not present", "This metric is expected only when access-list verification warning metrics are enabled; use it to alert on failed message-access checks.", []string{DocInterop, DocOPSupervisor, DocMetrics}, nil))
+	} else if max, _ := metrics.MaxValue(accessFailures); max > 0 {
+		findings = append(findings, finding("interop.supervisor.access_list_verify_failure", "op-supervisor access-list verification failures observed", report.SeverityWarn, target, fmt.Sprintf("max observed counter %.0f", max), "Investigate cross-chain message access-list verification failures before enabling or expanding interop traffic.", []string{DocInterop, DocOPSupervisor, DocMetrics}, map[string]string{"series": formatSeries(accessFailures)}))
+	} else {
+		findings = append(findings, finding("interop.supervisor.access_list_verify_failure", "op-supervisor access-list verification failures are zero", report.SeverityOK, target, "observed counter is zero", "No action needed.", []string{DocInterop, DocOPSupervisor, DocMetrics}, map[string]string{"series": formatSeries(accessFailures)}))
+	}
+
+	dbEntries := findMetricSuffix(samples, "op_supervisor", "_logdb_entries_current")
+	if len(dbEntries) == 0 {
+		findings = append(findings, finding("interop.supervisor.logdb_entries_missing", "op-supervisor log DB entry metric is missing", report.SeverityInfo, target, "op_supervisor_*_logdb_entries_current was not present", "Track log DB entries where available to confirm supervisor indexing state per chain and DB kind.", []string{DocOPSupervisor, DocMetrics}, nil))
+	} else {
+		findings = append(findings, finding("interop.supervisor.logdb_entries", "op-supervisor log DB entry metric present", report.SeverityOK, target, "op_supervisor_*_logdb_entries_current was present", "Use this to detect stalled or empty indexing databases.", []string{DocOPSupervisor, DocMetrics}, map[string]string{"series": formatSeries(limitSamples(dbEntries, 8))}))
+	}
+
+	rpcMetrics := findMetricContains(samples, "op_supervisor", "_rpc_client_", "_rpc_server_")
+	if len(rpcMetrics) == 0 {
+		findings = append(findings, finding("interop.supervisor.rpc_metrics_missing", "op-supervisor RPC metrics are missing", report.SeverityInfo, target, "no op_supervisor RPC client/server metrics were present", "Expose RPC metrics where available to monitor L1/L2 RPC and supervisor API health.", []string{DocOPSupervisor, DocMetrics}, nil))
+	} else {
+		findings = append(findings, finding("interop.supervisor.rpc_metrics", "op-supervisor RPC metrics present", report.SeverityOK, target, "op-supervisor RPC client/server metrics were present", "Alert on RPC error and latency rates using deployment-specific labels.", []string{DocOPSupervisor, DocMetrics}, map[string]string{"series": formatSeries(limitSamples(rpcMetrics, 8))}))
+	}
+	return findings
+}
+
+func checkSupervisorExpectedChains(cfg config.Config, refs []metrics.Sample) []report.Finding {
+	target := "interop.supervisor.metrics"
+	chains := cfg.Interop.Supervisor.ExpectedChains
+	if len(chains) == 0 {
+		chains = expectedInteropChains(cfg)
+	}
+	if len(chains) == 0 {
+		return []report.Finding{finding("interop.supervisor.expected_chains", "op-supervisor expected chains are not configured", report.SeverityInfo, target, "no expected chain IDs available", "Set interop.supervisor.expected_chains or configure interop dependencies so doctor can confirm supervisor refs cover the dependency set.", []string{DocInterop, DocOPSupervisor}, nil)}
+	}
+	var missing []string
+	for _, chainID := range chains {
+		if !samplesIncludeLabelValue(refs, fmt.Sprintf("%d", chainID), "chain", "chain_id") {
+			missing = append(missing, fmt.Sprintf("%d", chainID))
+		}
+	}
+	if len(missing) > 0 {
+		return []report.Finding{finding("interop.supervisor.expected_chains", "op-supervisor refs do not cover every expected chain", report.SeverityWarn, target, "missing refs for chain IDs "+strings.Join(missing, ", "), "Confirm the supervisor dependency set and L2 RPC/indexing configuration include every chain this operator expects to follow.", []string{DocInterop, DocOPSupervisor}, map[string]string{"missing_chain_ids": strings.Join(missing, ","), "expected_chain_ids": joinUint64s(chains)})}
+	}
+	return []report.Finding{finding("interop.supervisor.expected_chains", "op-supervisor refs cover expected chains", report.SeverityOK, target, fmt.Sprintf("%d expected chains observed", len(chains)), "No action needed.", []string{DocInterop, DocOPSupervisor}, map[string]string{"expected_chain_ids": joinUint64s(chains)})}
+}
+
+func checkSupervisorRefTypes(refs []metrics.Sample) []report.Finding {
+	target := "interop.supervisor.metrics"
+	required := []string{"local_unsafe", "local_safe", "cross_unsafe", "cross_safe"}
+	missing := make([]string, 0, len(required))
+	for _, refType := range required {
+		if _, ok := maxRefSampleValue(refs, refType); !ok {
+			missing = append(missing, refType)
+		}
+	}
+	if len(missing) > 0 {
+		return []report.Finding{finding("interop.supervisor.ref_types", "op-supervisor refs are missing expected safety types", report.SeverityInfo, target, "missing ref types "+strings.Join(missing, ", "), "This can be normal before all safety levels have advanced; dashboards should eventually track local/cross unsafe and safe heads.", []string{DocInterop, DocOPSupervisor, DocMetrics}, map[string]string{"missing_ref_types": strings.Join(missing, ",")})}
+	}
+	localUnsafe, _ := maxRefSampleValue(refs, "local_unsafe")
+	crossUnsafe, _ := maxRefSampleValue(refs, "cross_unsafe")
+	localSafe, _ := maxRefSampleValue(refs, "local_safe")
+	crossSafe, _ := maxRefSampleValue(refs, "cross_safe")
+	evidence := map[string]string{
+		"local_unsafe": fmt.Sprintf("%.0f", localUnsafe),
+		"cross_unsafe": fmt.Sprintf("%.0f", crossUnsafe),
+		"local_safe":   fmt.Sprintf("%.0f", localSafe),
+		"cross_safe":   fmt.Sprintf("%.0f", crossSafe),
+	}
+	if crossUnsafe > localUnsafe || crossSafe > localSafe {
+		return []report.Finding{finding("interop.supervisor.ref_types", "op-supervisor safety head ordering looks invalid", report.SeverityWarn, target, "cross safety heads exceed corresponding local heads", "Investigate supervisor indexing state and dependency-set configuration; cross heads should not exceed corresponding local heads.", []string{DocInterop, DocOPSupervisor, DocMetrics}, evidence)}
+	}
+	return []report.Finding{finding("interop.supervisor.ref_types", "op-supervisor safety refs are parseable", report.SeverityOK, target, "local/cross unsafe and safe refs were observed", "No action needed.", []string{DocInterop, DocOPSupervisor, DocMetrics}, evidence)}
+}
+
+func (r Runner) checkInteropMonitorMetrics(ctx context.Context, cfg config.Config) []report.Finding {
+	target := "interop.monitor.metrics"
+	if strings.TrimSpace(cfg.Interop.Monitor.Metrics) == "" {
+		return []report.Finding{finding("interop.monitor.metrics_endpoint", "op-interop-mon metrics endpoint is not configured", report.SeverityInfo, target, "metrics URL is empty", "Configure op-interop-mon metrics if this operator runs the optional interop monitor for executing-message observability.", []string{DocInterop, DocInteropMonitor, DocMetrics}, nil)}
+	}
+	samples, err := r.fetchMetrics(ctx, cfg.Interop.Monitor.Metrics)
+	if err != nil {
+		return []report.Finding{finding("interop.monitor.metrics_fetch", "op-interop-mon metrics fetch failed", report.SeverityWarn, target, err.Error(), "Check the op-interop-mon metrics listener, scrape path, and network policy.", []string{DocInteropMonitor, DocMetrics}, map[string]string{"metrics": redact.URL(cfg.Interop.Monitor.Metrics)})}
+	}
+	findings := []report.Finding{finding("interop.monitor.metrics_fetch", "op-interop-mon metrics fetched", report.SeverityOK, target, fmt.Sprintf("%d metric samples parsed", len(samples)), "Use these metrics to alert on interop message status and monitor health.", []string{DocInteropMonitor, DocMetrics}, map[string]string{"metrics": redact.URL(cfg.Interop.Monitor.Metrics)})}
+	monitorSeries := countMetricPrefix(samples, "op_interop_mon")
+	if monitorSeries == 0 {
+		findings = append(findings, finding("interop.monitor.metrics_names", "op-interop-mon metric names were not detected", report.SeverityWarn, target, "no parsed metric name started with op_interop_mon", "Confirm the endpoint belongs to op-interop-mon and that metrics are enabled.", []string{DocInteropMonitor, DocMetrics}, map[string]string{"samples": fmt.Sprintf("%d", len(samples))}))
+		return findings
+	}
+	findings = append(findings, finding("interop.monitor.metrics_names", "op-interop-mon metric names are present", report.SeverityOK, target, fmt.Sprintf("%d op-interop-mon metric samples parsed", monitorSeries), "No action needed.", []string{DocInteropMonitor, DocMetrics}, map[string]string{"op_interop_mon_samples": fmt.Sprintf("%d", monitorSeries)}))
+	findings = append(findings, checkInteropMonitorMetricSamples(samples)...)
+	return findings
+}
+
+func checkInteropMonitorMetricSamples(samples []metrics.Sample) []report.Finding {
+	target := "interop.monitor.metrics"
+	var findings []report.Finding
+
+	up := findMetricSuffix(samples, "op_interop_mon", "_up")
+	switch {
+	case len(up) == 0:
+		findings = append(findings, finding("interop.monitor.up_missing", "op-interop-mon up metric is missing", report.SeverityWarn, target, "op_interop_mon_*_up was not present", "Expose the op-interop-mon up metric so scrape reachability can be distinguished from process readiness.", []string{DocInteropMonitor, DocMetrics}, nil))
+	case anyValueNot(up, 1):
+		findings = append(findings, finding("interop.monitor.up", "op-interop-mon reports not up", report.SeverityFail, target, "op_interop_mon_*_up is not 1 for every series", "Investigate op-interop-mon process health before depending on executing-message observability.", []string{DocInteropMonitor, DocMetrics}, map[string]string{"series": formatSeries(up)}))
+	default:
+		findings = append(findings, finding("interop.monitor.up", "op-interop-mon reports up", report.SeverityOK, target, "op_interop_mon_*_up=1", "No action needed.", []string{DocInteropMonitor, DocMetrics}, map[string]string{"series": formatSeries(up)}))
+	}
+
+	messageStatus := findMetricSuffix(samples, "op_interop_mon", "_message_status")
+	if len(messageStatus) == 0 {
+		findings = append(findings, finding("interop.monitor.message_status_missing", "op-interop-mon message status metric is missing", report.SeverityWarn, target, "op_interop_mon_*_message_status was not present", "Expose message status gauges to alert on invalid, missing, or unknown executing messages.", []string{DocInterop, DocInteropMonitor, DocMetrics}, nil))
+	} else if bad := messageStatusRiskSamples(messageStatus); len(bad) > 0 {
+		findings = append(findings, finding("interop.monitor.message_status", "op-interop-mon message status reports risky messages", report.SeverityWarn, target, "invalid, missing, failed, error, or unknown message statuses were nonzero", "Investigate executing messages and dependency-chain RPC health before expanding interop traffic.", []string{DocInterop, DocInteropMonitor, DocMetrics}, map[string]string{"series": formatSeries(bad)}))
+	} else {
+		findings = append(findings, finding("interop.monitor.message_status", "op-interop-mon message status metrics are present", report.SeverityOK, target, "no risky message status series were nonzero", "No action needed.", []string{DocInterop, DocInteropMonitor, DocMetrics}, map[string]string{"series": formatSeries(limitSamples(messageStatus, 8))}))
+	}
+
+	terminalChanges := findMetricSuffix(samples, "op_interop_mon", "_terminal_status_changes")
+	if len(terminalChanges) == 0 {
+		findings = append(findings, finding("interop.monitor.terminal_status_changes_missing", "op-interop-mon terminal status change metric is missing", report.SeverityInfo, target, "op_interop_mon_*_terminal_status_changes was not present", "Track terminal status changes where available to detect valid/invalid flips.", []string{DocInteropMonitor, DocMetrics}, nil))
+	} else if max, _ := metrics.MaxValue(terminalChanges); max > 0 {
+		findings = append(findings, finding("interop.monitor.terminal_status_changes", "op-interop-mon terminal status changes observed", report.SeverityWarn, target, fmt.Sprintf("max observed value %.0f", max), "Investigate message status transitions; terminal valid/invalid flips are high-signal interop incidents.", []string{DocInterop, DocInteropMonitor, DocMetrics}, map[string]string{"series": formatSeries(terminalChanges)}))
+	} else {
+		findings = append(findings, finding("interop.monitor.terminal_status_changes", "op-interop-mon terminal status changes are zero", report.SeverityOK, target, "observed value is zero", "No action needed.", []string{DocInteropMonitor, DocMetrics}, map[string]string{"series": formatSeries(terminalChanges)}))
+	}
+
+	blockRanges := append(findMetricSuffix(samples, "op_interop_mon", "_executing_block_range"), findMetricSuffix(samples, "op_interop_mon", "_initiating_block_range")...)
+	if len(blockRanges) == 0 {
+		findings = append(findings, finding("interop.monitor.block_ranges_missing", "op-interop-mon block range metrics are missing", report.SeverityInfo, target, "executing/initiating block range metrics were not present", "Track executing and initiating block ranges where available to understand monitor coverage windows.", []string{DocInteropMonitor, DocMetrics}, nil))
+	} else {
+		findings = append(findings, finding("interop.monitor.block_ranges", "op-interop-mon block range metrics present", report.SeverityOK, target, "executing or initiating block range metrics were present", "Use these gauges to confirm the monitor is scanning the expected chain ranges.", []string{DocInteropMonitor, DocMetrics}, map[string]string{"series": formatSeries(limitSamples(blockRanges, 8))}))
 	}
 	return findings
 }

@@ -4,6 +4,14 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
+## 0.1.4 - Unreleased
+
+### Added
+
+- Optional op-supervisor metrics readiness checks for up status, local/cross safety refs, expected chain coverage, access-list verification failures, log DB metrics, and RPC metric presence.
+- Optional op-interop-mon metrics readiness checks for up status, message status, terminal status changes, and block range metric presence.
+- Prometheus alert templates, runbook content, docs, sample config, and fixtures for interop-specific metrics.
+
 ## 0.1.3 - 2026-05-10
 
 ### Added
