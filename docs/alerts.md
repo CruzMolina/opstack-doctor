@@ -142,10 +142,10 @@ op_interop_mon_default_terminal_status_changes
 The Go test suite parses generated alert YAML, compares generated alert output against a checked-in golden file, parses the checked-in example file, and validates redacted metric fixtures:
 
 ```sh
-go test ./internal/generate ./internal/checks
+go test ./cmd/opstack-doctor ./internal/generate ./internal/checks
 ```
 
-This proves the YAML shape is valid for the local structs, alert generator output changes are intentional, and fixture-backed finding IDs/severities remain stable.
+This proves the YAML shape is valid for the local structs, alert generator output changes are intentional, the public example stays in sync with `opstack-doctor generate alerts --config examples/doctor.example.yaml`, and fixture-backed finding IDs/severities remain stable.
 
 When alert generator changes are intentional, refresh the golden file and review the resulting YAML diff:
 

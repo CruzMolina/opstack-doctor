@@ -26,6 +26,12 @@ make promtool-check
 
 Review the golden YAML diff carefully so expression, threshold, label, duration, and annotation changes are explicit in the PR.
 
+The checked-in example rules in [`examples/prometheus-rules.example.yaml`](examples/prometheus-rules.example.yaml) should remain generated from [`examples/doctor.example.yaml`](examples/doctor.example.yaml). Refresh them with:
+
+```sh
+go run ./cmd/opstack-doctor generate alerts --config examples/doctor.example.yaml --out examples/prometheus-rules.example.yaml
+```
+
 ## Adding Checks
 
 - Prefer honest `warn` or `info` findings over false confidence.
