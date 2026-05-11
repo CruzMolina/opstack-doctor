@@ -4,6 +4,12 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
+## 0.1.9 - Unreleased
+
+### Added
+
+- Golden-file and command-level parity coverage for generated runbooks, including a checked-in sample runbook generated from `examples/doctor.example.yaml`.
+
 ## 0.1.8 - 2026-05-11
 
 ### Added

@@ -32,6 +32,13 @@ The checked-in example rules in [`examples/prometheus-rules.example.yaml`](examp
 go run ./cmd/opstack-doctor generate alerts --config examples/doctor.example.yaml --out examples/prometheus-rules.example.yaml
 ```
 
+Generated runbooks have the same regression pattern. Refresh the golden fixture and public example with:
+
+```sh
+UPDATE_GOLDEN=1 go test ./internal/generate
+go run ./cmd/opstack-doctor generate runbook --config examples/doctor.example.yaml --out examples/runbook.example.md
+```
+
 ## Adding Checks
 
 - Prefer honest `warn` or `info` findings over false confidence.

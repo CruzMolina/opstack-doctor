@@ -51,6 +51,30 @@ func TestRunGenerateAlertsMatchesExample(t *testing.T) {
 	}
 }
 
+func TestRunGenerateRunbookMatchesExample(t *testing.T) {
+	outPath := filepath.Join(t.TempDir(), "runbook.example.md")
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"generate", "runbook",
+		"--config", "../../examples/doctor.example.yaml",
+		"--out", outPath,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("generate runbook code = %d, stderr = %s", code, stderr.String())
+	}
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read generated runbook: %v", err)
+	}
+	want, err := os.ReadFile("../../examples/runbook.example.md")
+	if err != nil {
+		t.Fatalf("read example runbook: %v", err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("generated runbook differs from examples/runbook.example.md; run go run ./cmd/opstack-doctor generate runbook --config examples/doctor.example.yaml --out examples/runbook.example.md\n%s", firstDifference(want, got))
+	}
+}
+
 func firstDifference(want, got []byte) string {
 	wantLines := strings.Split(string(want), "\n")
 	gotLines := strings.Split(string(got), "\n")

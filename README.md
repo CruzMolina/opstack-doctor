@@ -155,6 +155,8 @@ The `ExecutionCandidateLaggingReference` alert assumes you run `opstack-doctor e
 
 See [docs/alerts.md](docs/alerts.md) for alert assumptions, doctor-exported metrics, and validation notes.
 
+See [examples/runbook.example.md](examples/runbook.example.md) for a generated runbook from the sample config.
+
 ## Development
 
 ```sh
