@@ -9,6 +9,7 @@ The project uses semantic versioning. Release tags are prefixed with `v`, for ex
 ### Added
 
 - Golden-file regression coverage for generated alert YAML, including an `UPDATE_GOLDEN=1` refresh workflow and `promtool` validation of the golden output.
+- Command-level parity coverage proving `examples/prometheus-rules.example.yaml` matches `opstack-doctor generate alerts --config examples/doctor.example.yaml`.
 - Negative `promtool test rules` cases proving representative generated alerts stay quiet for healthy doctor-exported and native interop inputs.
 
 ## 0.1.7 - 2026-05-11
