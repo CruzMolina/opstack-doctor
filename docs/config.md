@@ -6,6 +6,14 @@ Use `opstack-doctor validate --config doctor.yaml` to lint required fields, URL 
 
 Start from [examples/doctor.example.yaml](../examples/doctor.example.yaml).
 
+Generate a JSON Schema for editor integration or config review with:
+
+```sh
+opstack-doctor generate schema --out doctor.schema.json
+```
+
+The checked-in example schema is [examples/doctor.schema.json](../examples/doctor.schema.json). The schema describes the supported YAML shape, required fields, enum values, defaults, and URL formats. It is static and does not contact endpoints; use `opstack-doctor validate --config doctor.yaml` for offline topology validation.
+
 ## Top-Level Fields
 
 | Field | Type | Required | Description |

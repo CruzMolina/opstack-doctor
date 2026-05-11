@@ -4,6 +4,12 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
+## 0.1.12 - Unreleased
+
+### Added
+
+- JSON Schema generation with `opstack-doctor generate schema --out doctor.schema.json`, including a checked-in schema example and parity tests.
+
 ## 0.1.11 - 2026-05-11
 
 ### Added

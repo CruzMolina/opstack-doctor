@@ -90,7 +90,7 @@ func TestRunCompletionBash(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("completion bash code = %d, stderr = %s", code, stderr.String())
 	}
-	for _, want := range []string{"complete -F _opstack_doctor_completion opstack-doctor", "validate check export demo generate completion version help"} {
+	for _, want := range []string{"complete -F _opstack_doctor_completion opstack-doctor", "validate check export demo generate completion version help", "alerts runbook schema"} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Fatalf("completion bash output missing %q:\n%s", want, stdout.String())
 		}
@@ -153,6 +153,40 @@ func TestRunGenerateRunbookMatchesExample(t *testing.T) {
 	}
 	if string(got) != string(want) {
 		t.Fatalf("generated runbook differs from examples/runbook.example.md; run go run ./cmd/opstack-doctor generate runbook --config examples/doctor.example.yaml --out examples/runbook.example.md\n%s", firstDifference(want, got))
+	}
+}
+
+func TestRunGenerateSchemaMatchesExample(t *testing.T) {
+	outPath := filepath.Join(t.TempDir(), "doctor.schema.json")
+	var stdout, stderr bytes.Buffer
+	code := run([]string{
+		"generate", "schema",
+		"--out", outPath,
+	}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("generate schema code = %d, stderr = %s", code, stderr.String())
+	}
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read generated schema: %v", err)
+	}
+	want, err := os.ReadFile("../../examples/doctor.schema.json")
+	if err != nil {
+		t.Fatalf("read example schema: %v", err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("generated schema differs from examples/doctor.schema.json; run go run ./cmd/opstack-doctor generate schema --out examples/doctor.schema.json\n%s", firstDifference(want, got))
+	}
+}
+
+func TestRunGenerateSchemaRequiresOut(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"generate", "schema"}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("generate schema without --out code = %d, want 2; stdout = %s", code, stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "--out is required") {
+		t.Fatalf("generate schema without --out stderr = %s", stderr.String())
 	}
 }
 

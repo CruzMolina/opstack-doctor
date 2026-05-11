@@ -62,7 +62,13 @@ _opstack_doctor_completion() {
       check) COMPREPLY=( $(compgen -W "--config --output --fail-on" -- "$cur") ) ;;
       demo) COMPREPLY=( $(compgen -W "--scenario --output --fail-on" -- "$cur") ) ;;
       export) [[ "$subcmd" == "metrics" ]] && COMPREPLY=( $(compgen -W "--config" -- "$cur") ) ;;
-      generate) [[ "$subcmd" == "alerts" || "$subcmd" == "runbook" ]] && COMPREPLY=( $(compgen -W "--config --out" -- "$cur") ) ;;
+      generate)
+        if [[ "$subcmd" == "alerts" || "$subcmd" == "runbook" ]]; then
+          COMPREPLY=( $(compgen -W "--config --out" -- "$cur") )
+        elif [[ "$subcmd" == "schema" ]]; then
+          COMPREPLY=( $(compgen -W "--out" -- "$cur") )
+        fi
+        ;;
     esac
     return 0
   fi
@@ -74,7 +80,7 @@ _opstack_doctor_completion() {
     2)
       case "$cmd" in
         export) COMPREPLY=( $(compgen -W "metrics" -- "$cur") ) ;;
-        generate) COMPREPLY=( $(compgen -W "alerts runbook" -- "$cur") ) ;;
+        generate) COMPREPLY=( $(compgen -W "alerts runbook schema" -- "$cur") ) ;;
         completion) COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") ) ;;
       esac
       ;;
@@ -93,7 +99,7 @@ _opstack_doctor() {
     'check:run read-only live diagnostics'
     'export:emit scrapeable exports'
     'demo:run mocked local scenarios'
-    'generate:generate alerts or runbooks'
+    'generate:generate alerts, runbooks, or schema'
     'completion:generate shell completion'
     'version:print version'
     'help:show help'
@@ -114,7 +120,7 @@ _opstack_doctor() {
     '--fail-on[exit nonzero on severity]:severity:(fail warn)'
   )
   export_subcommands=('metrics:emit doctor findings as Prometheus text metrics')
-  generate_subcommands=('alerts:generate Prometheus alert rules' 'runbook:generate Markdown runbook')
+  generate_subcommands=('alerts:generate Prometheus alert rules' 'runbook:generate Markdown runbook' 'schema:generate JSON Schema for doctor.yaml')
   completion_shells=('bash:bash completion' 'zsh:zsh completion' 'fish:fish completion')
 
   case ${words[2]} in
@@ -139,6 +145,8 @@ _opstack_doctor() {
         _describe 'generate subcommand' generate_subcommands
       elif [[ ${words[3]} == alerts || ${words[3]} == runbook ]]; then
         _arguments '--config[path to doctor YAML config]:config file:_files' '--out[path for generated output]:output file:_files'
+      elif [[ ${words[3]} == schema ]]; then
+        _arguments '--out[path for generated JSON Schema]:output file:_files'
       fi
       ;;
     completion)
@@ -160,7 +168,7 @@ complete -c opstack-doctor -n "__fish_use_subcommand" -a validate -d "Validate c
 complete -c opstack-doctor -n "__fish_use_subcommand" -a check -d "Run read-only live diagnostics"
 complete -c opstack-doctor -n "__fish_use_subcommand" -a export -d "Emit scrapeable exports"
 complete -c opstack-doctor -n "__fish_use_subcommand" -a demo -d "Run mocked local scenarios"
-complete -c opstack-doctor -n "__fish_use_subcommand" -a generate -d "Generate alerts or runbooks"
+complete -c opstack-doctor -n "__fish_use_subcommand" -a generate -d "Generate alerts, runbooks, or schema"
 complete -c opstack-doctor -n "__fish_use_subcommand" -a completion -d "Generate shell completion"
 complete -c opstack-doctor -n "__fish_use_subcommand" -a version -d "Print version"
 complete -c opstack-doctor -n "__fish_use_subcommand" -a help -d "Show help"
@@ -179,10 +187,12 @@ complete -c opstack-doctor -n "__fish_seen_subcommand_from demo" -l fail-on -xa 
 complete -c opstack-doctor -n "__fish_seen_subcommand_from export; and not __fish_seen_subcommand_from metrics" -a metrics -d "Emit doctor findings as Prometheus text metrics"
 complete -c opstack-doctor -n "__fish_seen_subcommand_from export; and __fish_seen_subcommand_from metrics" -l config -r -d "Path to doctor YAML config"
 
-complete -c opstack-doctor -n "__fish_seen_subcommand_from generate; and not __fish_seen_subcommand_from alerts runbook" -a alerts -d "Generate Prometheus alert rules"
-complete -c opstack-doctor -n "__fish_seen_subcommand_from generate; and not __fish_seen_subcommand_from alerts runbook" -a runbook -d "Generate Markdown runbook"
+complete -c opstack-doctor -n "__fish_seen_subcommand_from generate; and not __fish_seen_subcommand_from alerts runbook schema" -a alerts -d "Generate Prometheus alert rules"
+complete -c opstack-doctor -n "__fish_seen_subcommand_from generate; and not __fish_seen_subcommand_from alerts runbook schema" -a runbook -d "Generate Markdown runbook"
+complete -c opstack-doctor -n "__fish_seen_subcommand_from generate; and not __fish_seen_subcommand_from alerts runbook schema" -a schema -d "Generate JSON Schema for doctor.yaml"
 complete -c opstack-doctor -n "__fish_seen_subcommand_from generate; and __fish_seen_subcommand_from alerts runbook" -l config -r -d "Path to doctor YAML config"
 complete -c opstack-doctor -n "__fish_seen_subcommand_from generate; and __fish_seen_subcommand_from alerts runbook" -l out -r -d "Path for generated output"
+complete -c opstack-doctor -n "__fish_seen_subcommand_from generate; and __fish_seen_subcommand_from schema" -l out -r -d "Path for generated JSON Schema"
 
 complete -c opstack-doctor -n "__fish_seen_subcommand_from completion" -xa "bash zsh fish" -d "Shell"
 `
