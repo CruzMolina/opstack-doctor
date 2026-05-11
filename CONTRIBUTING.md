@@ -45,6 +45,12 @@ The checked-in JSON Schema should match the static schema generator. Refresh it 
 go run ./cmd/opstack-doctor generate schema --out examples/doctor.schema.json
 ```
 
+Schema contract tests validate the public example config and intentionally invalid fixtures against the checked-in schema. When adding or changing config fields, update the schema, examples, docs, and fixtures together, then run:
+
+```sh
+make schema-check
+```
+
 ## Adding Checks
 
 - Prefer honest `warn` or `info` findings over false confidence.

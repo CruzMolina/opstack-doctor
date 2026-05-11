@@ -1,0 +1,7 @@
+chain:
+  name: op-mainnet
+  chain_id: 10
+
+execution:
+  reference_rpc: "ws://op-geth.example.invalid"
+  candidate_rpc: "http://op-reth.example.invalid"

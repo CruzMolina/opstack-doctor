@@ -1,0 +1,11 @@
+chain:
+  name: op-mainnet
+  chain_id: 10
+
+execution:
+  reference_rpc: "http://op-geth.example.invalid"
+  candidate_rpc: "http://op-reth.example.invalid"
+
+op_nodes:
+  - name: source-1
+    role: archive

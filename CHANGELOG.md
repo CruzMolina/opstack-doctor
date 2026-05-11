@@ -9,6 +9,7 @@ The project uses semantic versioning. Release tags are prefixed with `v`, for ex
 ### Added
 
 - JSON Schema generation with `opstack-doctor generate schema --out doctor.schema.json`, including a checked-in schema example and parity tests.
+- Schema contract validation for the checked-in example config and intentionally invalid fixtures, wired into release checks with `make schema-check`.
 
 ## 0.1.11 - 2026-05-11
 
