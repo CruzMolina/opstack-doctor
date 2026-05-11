@@ -10,6 +10,11 @@ import (
 	"opstack-doctor/internal/config"
 )
 
+const (
+	alertGoldenConfig = "testdata/alerts.golden.config.yaml"
+	alertGoldenFile   = "testdata/alerts.golden.yaml"
+)
+
 func TestAlertsYAMLParsesAndContainsExpectedRules(t *testing.T) {
 	cfg := config.Config{
 		Chain: config.ChainConfig{Name: "op-mainnet", ChainID: 10},
@@ -102,6 +107,29 @@ func TestAlertsYAMLParsesAndContainsExpectedRules(t *testing.T) {
 	}
 }
 
+func TestAlertsGolden(t *testing.T) {
+	cfg, err := config.Load(alertGoldenConfig)
+	if err != nil {
+		t.Fatalf("load golden config: %v", err)
+	}
+	got, err := Alerts(cfg)
+	if err != nil {
+		t.Fatalf("Alerts() error = %v", err)
+	}
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		if err := os.WriteFile(alertGoldenFile, got, 0o644); err != nil {
+			t.Fatalf("update golden file: %v", err)
+		}
+	}
+	want, err := os.ReadFile(alertGoldenFile)
+	if err != nil {
+		t.Fatalf("read golden file: %v", err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("generated alert YAML differs from %s; run UPDATE_GOLDEN=1 go test ./internal/generate\n%s", alertGoldenFile, firstDifference(want, got))
+	}
+}
+
 func TestExampleAlertYAMLParses(t *testing.T) {
 	data, err := os.ReadFile("../../examples/prometheus-rules.example.yaml")
 	if err != nil {
@@ -127,4 +155,30 @@ func findRule(rules RuleFile, name string) (Rule, bool) {
 		}
 	}
 	return Rule{}, false
+}
+
+func firstDifference(want, got []byte) string {
+	wantLines := strings.Split(string(want), "\n")
+	gotLines := strings.Split(string(got), "\n")
+	max := len(wantLines)
+	if len(gotLines) > max {
+		max = len(gotLines)
+	}
+	for i := 0; i < max; i++ {
+		var wantLine, gotLine string
+		if i < len(wantLines) {
+			wantLine = wantLines[i]
+		} else {
+			wantLine = "<missing>"
+		}
+		if i < len(gotLines) {
+			gotLine = gotLines[i]
+		} else {
+			gotLine = "<missing>"
+		}
+		if wantLine != gotLine {
+			return "first differing line:\nwant: " + wantLine + "\n got: " + gotLine
+		}
+	}
+	return "contents differ"
 }
