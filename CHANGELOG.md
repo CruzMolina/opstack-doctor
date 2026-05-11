@@ -4,6 +4,12 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
+## 0.1.11 - Unreleased
+
+### Added
+
+- Shell completion generation with `opstack-doctor completion bash|zsh|fish`.
+
 ## 0.1.10 - 2026-05-11
 
 ### Added
