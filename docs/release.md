@@ -28,6 +28,8 @@ make release-preflight
 
 The preflight verifies `VERSION`, `cmd/opstack-doctor/main.go`, README install snippets, the latest dated changelog heading, and `docs/releases/v$(cat VERSION).md` agree. It also requires release notes to mention both GHCR tags: `v$(cat VERSION)` and `$(cat VERSION)`.
 
+CI also runs `make release-preflight` directly so release metadata drift is caught on pull requests, even before a maintainer runs the full local release checklist.
+
 If Docker is available, verify the local image path too:
 
 ```sh

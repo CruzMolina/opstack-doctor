@@ -4,6 +4,12 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
+## 0.1.14 - Unreleased
+
+### Added
+
+- Explicit GitHub Actions CI step for `make release-preflight`.
+
 ## 0.1.13 - 2026-05-11
 
 ### Added
