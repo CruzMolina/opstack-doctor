@@ -517,16 +517,25 @@ func (r Runner) compareTopologyRPCHeads(ctx context.Context, cfg config.Config, 
 
 func compareTopologyMetricSafeHeads(cfg config.Config, sourceState, nodeState nodeMetricsState) []report.Finding {
 	target := "op_nodes." + nodeState.node.Name + ".metrics"
-	sourceSafe, sourceOK := safeRef(sourceState.samples)
-	nodeSafe, nodeOK := safeRef(nodeState.samples)
+	sourceSafeSample, sourceOK := refSample(sourceState.samples, "safe")
+	nodeSafeSample, nodeOK := refSample(nodeState.samples, "safe")
 	if !sourceOK || !nodeOK {
 		return []report.Finding{finding("topology."+nodeState.node.Name+".safe_head_metrics", "Safe-head metric comparison unavailable", report.SeverityInfo, target, "source or follower did not expose parseable safe refs", "Expose labeled op_node_default_refs_number series for safe refs to validate light-node tracking through metrics.", []string{DocMetrics, DocLightNodes}, map[string]string{"source": sourceState.node.Name})}
 	}
+	sourceSafe := sourceSafeSample.Value
+	nodeSafe := nodeSafeSample.Value
 	lag := float64(0)
 	if sourceSafe > nodeSafe {
 		lag = sourceSafe - nodeSafe
 	}
-	evidence := map[string]string{"source_safe": fmt.Sprintf("%.0f", sourceSafe), "node_safe": fmt.Sprintf("%.0f", nodeSafe), "lag_blocks": fmt.Sprintf("%.0f", lag), "source": sourceState.node.Name}
+	evidence := map[string]string{
+		"source_safe":        fmt.Sprintf("%.0f", sourceSafe),
+		"node_safe":          fmt.Sprintf("%.0f", nodeSafe),
+		"lag_blocks":         fmt.Sprintf("%.0f", lag),
+		"source":             sourceState.node.Name,
+		"source_safe_series": formatSeries([]metrics.Sample{sourceSafeSample}),
+		"node_safe_series":   formatSeries([]metrics.Sample{nodeSafeSample}),
+	}
 	if lag > float64(cfg.Thresholds.MaxSafeLagBlocks) {
 		return []report.Finding{finding("topology."+nodeState.node.Name+".safe_head_metrics", "Follower safe head lags source", report.SeverityWarn, target, fmt.Sprintf("safe-head lag is %.0f blocks", lag), "Treat source-tier and follower-safe-head lag as production alerts.", []string{DocMetrics, DocLightNodes}, evidence)}
 	}
@@ -1369,34 +1378,119 @@ func safeRef(samples []metrics.Sample) (float64, bool) {
 }
 
 func refValue(samples []metrics.Sample, name string) (float64, bool) {
+	sample, ok := refSample(samples, name)
+	if !ok {
+		return 0, false
+	}
+	return sample.Value, true
+}
+
+func refSample(samples []metrics.Sample, name string) (metrics.Sample, bool) {
 	var values []metrics.Sample
 	for _, sample := range metrics.Find(samples, "op_node_default_refs_number") {
 		if sampleLooksLikeRef(sample, name) {
 			values = append(values, sample)
 		}
 	}
-	return metrics.MaxValue(values)
+	if len(values) == 0 {
+		return metrics.Sample{}, false
+	}
+	best := values[0]
+	for _, sample := range values[1:] {
+		if sample.Value > best.Value {
+			best = sample
+		}
+	}
+	return best, true
 }
 
 func sampleLooksLikeRef(sample metrics.Sample, name string) bool {
-	for _, value := range sample.Labels {
-		if containsLabelToken(strings.ToLower(value), name) {
+	kind, ok := opNodeRefKind(sample)
+	return ok && kind == name
+}
+
+func opNodeRefKind(sample metrics.Sample) (string, bool) {
+	var kind string
+	hasL2 := false
+	hasL1 := false
+	for key, value := range sample.Labels {
+		lowerKey := strings.ToLower(key)
+		if isOPNodeRefLabel(lowerKey) {
+			if valueKind, ok := refKindFromLabelValue(value); ok {
+				if kind != "" && kind != valueKind {
+					return "", false
+				}
+				kind = valueKind
+			}
+			hasL2 = hasL2 || containsLayerToken(value, "l2")
+			hasL1 = hasL1 || containsLayerToken(value, "l1")
+		}
+		if isOPNodeLayerLabel(lowerKey) {
+			hasL2 = hasL2 || containsLayerToken(value, "l2")
+			hasL1 = hasL1 || containsLayerToken(value, "l1")
+		}
+	}
+	return kind, kind != "" && hasL2 && !hasL1
+}
+
+func isOPNodeRefLabel(key string) bool {
+	return strings.Contains(key, "ref") || key == "type" || key == "kind" || key == "name"
+}
+
+func isOPNodeLayerLabel(key string) bool {
+	return key == "layer" || key == "network" || key == "scope"
+}
+
+func refKindFromLabelValue(value string) (string, bool) {
+	tokens := labelTokens(value)
+	for _, name := range []string{"unsafe", "finalized", "safe"} {
+		if hasToken(tokens, name) || compactLabelMatchesRef(value, name) {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+func containsLayerToken(value, layer string) bool {
+	tokens := labelTokens(value)
+	return hasToken(tokens, layer) || compactLabelHasLayer(value, layer)
+}
+
+func labelTokens(value string) []string {
+	value = strings.ToLower(value)
+	parts := strings.FieldsFunc(value, func(r rune) bool {
+		return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'))
+	})
+	return parts
+}
+
+func hasToken(parts []string, token string) bool {
+	for _, part := range parts {
+		if part == token {
 			return true
 		}
 	}
 	return false
 }
 
-func containsLabelToken(value, token string) bool {
-	parts := strings.FieldsFunc(value, func(r rune) bool {
-		return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'))
-	})
-	for _, part := range parts {
-		if part == token {
-			return true
+func compactLabelMatchesRef(value, name string) bool {
+	compact := compactLabel(value)
+	return compact == "l2"+name || compact == name+"l2"
+}
+
+func compactLabelHasLayer(value, layer string) bool {
+	compact := compactLabel(value)
+	return compact == layer || strings.HasPrefix(compact, layer) || strings.HasSuffix(compact, layer)
+}
+
+func compactLabel(value string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(value) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
 		}
 	}
-	return value == token
+	return b.String()
 }
 
 func formatSeries(samples []metrics.Sample) string {

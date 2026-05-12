@@ -24,7 +24,7 @@ Before contributing, replace sensitive values with stable placeholders:
 - Customer, operator, or environment names: replace with generic names such as `op-mainnet`, `chain-a`, or `backend-a`.
 - High-cardinality labels that are not needed by a test: remove the label or reduce the fixture to the few series needed.
 
-Keep metric names and useful labels intact when they exercise parser/check behavior. For example, keep variants such as `backend` versus `backend_name`, `code` versus `status_code`, and `ref_name` versus `type` when the fixture is meant to prove label drift behavior.
+Keep metric names and useful labels intact when they exercise parser/check behavior. For example, keep variants such as `backend` versus `backend_name`, `code` versus `status_code`, and `ref_name` versus `type` when the fixture is meant to prove label drift behavior. For op-node refs, prefer explicit L2 fixtures such as `ref="l2_safe"` or `type="safe",layer="l2"` over ambiguous bare values such as `ref="safe"`.
 
 ## Minimize
 
