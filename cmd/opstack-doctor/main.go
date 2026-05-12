@@ -17,7 +17,7 @@ import (
 	configvalidate "opstack-doctor/internal/validate"
 )
 
-var version = "0.1.12"
+var version = "0.1.13"
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
