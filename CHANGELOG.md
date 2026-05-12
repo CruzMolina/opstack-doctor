@@ -9,6 +9,7 @@ The project uses semantic versioning. Release tags are prefixed with `v`, for ex
 ### Added
 
 - Explicit GitHub Actions CI step for `make release-preflight`.
+- More flexible, case-insensitive L2 op-node refs parsing for `op_node_default_refs_number`, with fixture coverage for split and combined safe/finalized/unsafe labels.
 
 ## 0.1.13 - 2026-05-11
 

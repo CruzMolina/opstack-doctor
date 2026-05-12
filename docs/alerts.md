@@ -55,6 +55,8 @@ op-node metric labels vary by version and scrape configuration. Generated rules 
 - `ref`: ref type containing values like `safe`, `finalized`, or `unsafe`.
 - `layer`: layer label containing values like `l2`.
 
+The built-in checker parses `op_node_default_refs_number` refs when labels explicitly identify L2 refs. Recognized shapes include combined labels such as `ref="l2_safe"`, `ref_name="L2-FINALIZED"`, or `type="unsafe_l2"`, and split labels such as `type="safe", layer="l2"`. Bare values such as `ref="safe"` are treated as ambiguous rather than silently assumed to be L2.
+
 Before production use, compare generated selectors against your real Prometheus series:
 
 ```promql

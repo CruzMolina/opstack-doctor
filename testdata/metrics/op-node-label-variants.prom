@@ -1,0 +1,12 @@
+# Redacted op-node fixture: healthy refs with split, compact, and case-varied L2 labels.
+op_node_default_up 1
+op_node_default_refs_number{type="safe",layer="L2"} 250
+op_node_default_refs_number{ref_name="L2-FINALIZED"} 245
+op_node_default_refs_number{kind="unsafe",layer="l2"} 251
+op_node_default_refs_number{ref="safe"} 999
+op_node_default_refs_number{ref="l1_safe"} 999
+op_node_default_peer_count 4
+op_node_default_p2p_peer_count{direction="outbound"} 4
+op_node_default_derivation_errors_total 0
+op_node_default_pipeline_resets_total 0
+op_node_default_rpc_client_request_duration_seconds{method="eth_getBlockByNumber",quantile="0.95"} 0.2

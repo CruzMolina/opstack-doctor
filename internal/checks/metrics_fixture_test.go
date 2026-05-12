@@ -151,6 +151,22 @@ func TestOPNodeMetricFixtures(t *testing.T) {
 			},
 		},
 		{
+			name:             "label variant metrics",
+			fixture:          "op-node-label-variants.prom",
+			wantNoWarnOrFail: true,
+			want: map[string]report.Severity{
+				"op_node.fixture-node.up":                      report.SeverityOK,
+				"op_node.fixture-node.refs":                    report.SeverityOK,
+				"op_node.fixture-node.refs_safe":               report.SeverityOK,
+				"op_node.fixture-node.refs_finalized":          report.SeverityOK,
+				"op_node.fixture-node.refs_unsafe":             report.SeverityOK,
+				"op_node.fixture-node.peer_count":              report.SeverityOK,
+				"op_node.fixture-node.derivation_errors_total": report.SeverityOK,
+				"op_node.fixture-node.pipeline_resets_total":   report.SeverityOK,
+				"op_node.fixture-node.rpc_latency":             report.SeverityOK,
+			},
+		},
+		{
 			name:    "warning metrics",
 			fixture: "op-node-warn.prom",
 			want: map[string]report.Severity{
