@@ -32,6 +32,9 @@ jobs:
       - name: Run vet
         run: go vet ./...
 
+      - name: Run release metadata preflight
+        run: make release-preflight
+
       - name: Validate generated alert rules
         run: make promtool-check
 
