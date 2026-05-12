@@ -30,6 +30,57 @@ func TestRunDemoFailOnWarn(t *testing.T) {
 	}
 }
 
+func TestRunFixtureJSONMatchesExamples(t *testing.T) {
+	for _, scenario := range []string{"healthy", "warn", "fail"} {
+		t.Run(scenario, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			code := run([]string{"fixture", scenario, "--output", "json"}, &stdout, &stderr)
+			if code != 0 {
+				t.Fatalf("fixture %s code = %d, stderr = %s", scenario, code, stderr.String())
+			}
+			want, err := os.ReadFile(filepath.Join("../../examples", "fixture-"+scenario+".example.json"))
+			if err != nil {
+				t.Fatalf("read fixture example: %v", err)
+			}
+			if stdout.String() != string(want) {
+				t.Fatalf("fixture %s differs from checked-in example; refresh with go run ./cmd/opstack-doctor fixture %s --output json > examples/fixture-%s.example.json\n%s", scenario, scenario, scenario, firstDifference(want, stdout.Bytes()))
+			}
+		})
+	}
+}
+
+func TestRunFixturePrometheus(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"fixture", "healthy", "--output", "prometheus"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run fixture code = %d, stderr = %s", code, stderr.String())
+	}
+	for _, want := range []string{"opstack_doctor_findings", "opstack_doctor_execution_candidate_lag_blocks", "chain=\"op-mainnet-fixture\""} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("fixture prometheus output missing %q:\n%s", want, stdout.String())
+		}
+	}
+}
+
+func TestRunFixtureFailOnWarn(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"fixture", "warn", "--fail-on", "warn"}, &stdout, &stderr)
+	if code != 1 {
+		t.Fatalf("run fixture warn code = %d, want 1; stderr = %s", code, stderr.String())
+	}
+}
+
+func TestRunFixtureRejectsUnknownScenario(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"fixture", "mystery"}, &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("run fixture unknown code = %d, want 2; stdout = %s", code, stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "unknown fixture scenario") {
+		t.Fatalf("run fixture unknown stderr = %s", stderr.String())
+	}
+}
+
 func TestRunValidateJSON(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	code := run([]string{"validate", "--config", "../../examples/doctor.example.yaml", "--output", "json"}, &stdout, &stderr)
@@ -90,7 +141,7 @@ func TestRunCompletionBash(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("completion bash code = %d, stderr = %s", code, stderr.String())
 	}
-	for _, want := range []string{"complete -F _opstack_doctor_completion opstack-doctor", "validate check export demo generate completion version help", "alerts runbook schema"} {
+	for _, want := range []string{"complete -F _opstack_doctor_completion opstack-doctor", "validate check export demo fixture generate completion version help", "healthy warn fail", "alerts runbook schema"} {
 		if !strings.Contains(stdout.String(), want) {
 			t.Fatalf("completion bash output missing %q:\n%s", want, stdout.String())
 		}

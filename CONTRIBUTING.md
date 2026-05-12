@@ -51,6 +51,14 @@ Schema contract tests validate the public example config and intentionally inval
 make schema-check
 ```
 
+Deterministic fixture reports live in [`examples`](examples) and should match the built-in `fixture` command exactly. Refresh them after intentional fixture-output changes with:
+
+```sh
+go run ./cmd/opstack-doctor fixture healthy --output json > examples/fixture-healthy.example.json
+go run ./cmd/opstack-doctor fixture warn --output json > examples/fixture-warn.example.json
+go run ./cmd/opstack-doctor fixture fail --output json > examples/fixture-fail.example.json
+```
+
 ## Adding Checks
 
 - Prefer honest `warn` or `info` findings over false confidence.

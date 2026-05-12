@@ -12,6 +12,7 @@ import (
 	"opstack-doctor/internal/completion"
 	"opstack-doctor/internal/config"
 	"opstack-doctor/internal/demo"
+	"opstack-doctor/internal/fixture"
 	"opstack-doctor/internal/generate"
 	"opstack-doctor/internal/report"
 	configvalidate "opstack-doctor/internal/validate"
@@ -42,6 +43,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runExport(args[1:], stdout, stderr)
 	case "demo":
 		return runDemo(args[1:], stdout, stderr)
+	case "fixture":
+		return runFixture(args[1:], stdout, stderr)
 	case "completion":
 		return runCompletion(args[1:], stdout, stderr)
 	case "-h", "--help", "help":
@@ -52,6 +55,51 @@ func run(args []string, stdout, stderr io.Writer) int {
 		usage(stderr)
 		return 2
 	}
+}
+
+func runFixture(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprintln(stderr, "usage: opstack-doctor fixture healthy|warn|fail [--output human|json|prometheus] [--fail-on fail|warn]")
+		return 2
+	}
+	scenario, err := fixture.Get(args[0])
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	fs := flag.NewFlagSet("fixture", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	output := fs.String("output", "human", "output format: human, json, or prometheus")
+	failOn := fs.String("fail-on", "", "exit nonzero on severity: fail or warn")
+	if err := fs.Parse(args[1:]); err != nil {
+		return 2
+	}
+	switch *output {
+	case "human":
+		if err := report.RenderHuman(stdout, scenario.Findings); err != nil {
+			fmt.Fprintf(stderr, "render fixture report: %v\n", err)
+			return 1
+		}
+	case "json":
+		if err := report.RenderJSON(stdout, scenario.Findings); err != nil {
+			fmt.Fprintf(stderr, "render fixture report: %v\n", err)
+			return 1
+		}
+	case "prometheus":
+		if err := report.RenderPrometheus(stdout, scenario.Findings, report.PrometheusOptions{Chain: scenario.Chain}); err != nil {
+			fmt.Fprintf(stderr, "render fixture prometheus report: %v\n", err)
+			return 1
+		}
+	default:
+		fmt.Fprintf(stderr, "invalid --output value %q: expected human, json, or prometheus\n", *output)
+		return 2
+	}
+	code, err := report.ExitCode(scenario.Findings, *failOn)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 2
+	}
+	return code
 }
 
 func runCompletion(args []string, stdout, stderr io.Writer) int {
@@ -342,6 +390,7 @@ Usage:
   opstack-doctor check --config doctor.yaml --output prometheus
   opstack-doctor export metrics --config doctor.yaml
   opstack-doctor demo --scenario healthy|warn|fail [--output human|json|prometheus]
+  opstack-doctor fixture healthy|warn|fail [--output human|json|prometheus] [--fail-on fail|warn]
   opstack-doctor generate alerts --config doctor.yaml --out prometheus-rules.yaml
   opstack-doctor generate runbook --config doctor.yaml --out runbook.md
   opstack-doctor generate schema --out doctor.schema.json
