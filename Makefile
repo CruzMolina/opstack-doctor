@@ -3,7 +3,7 @@ IMAGE ?= opstack-doctor:$(VERSION)
 BIN ?= opstack-doctor
 PROMTOOL_IMAGE ?= prom/prometheus:v3.7.3
 
-.PHONY: test vet fmt fmt-check version-check build clean demo-smoke schema-check promtool-check promtool-test release-check docker-build docker-smoke
+.PHONY: test vet fmt fmt-check version-check build clean demo-smoke schema-check release-preflight promtool-check promtool-test release-check docker-build docker-smoke
 
 fmt:
 	gofmt -w ./cmd ./internal
@@ -38,13 +38,16 @@ demo-smoke:
 schema-check:
 	go test ./internal/generate -run 'TestSchemaContract'
 
+release-preflight:
+	go run ./internal/releasepreflight
+
 promtool-check:
 	docker run --rm --entrypoint promtool -v "$$(pwd):/work:ro" --workdir /work $(PROMTOOL_IMAGE) check rules examples/prometheus-rules.example.yaml internal/generate/testdata/alerts.golden.yaml
 
 promtool-test:
 	docker run --rm --entrypoint promtool -v "$$(pwd):/work:ro" --workdir /work/examples $(PROMTOOL_IMAGE) test rules prometheus-rules.test.yaml
 
-release-check: fmt-check version-check test vet build demo-smoke schema-check promtool-check promtool-test
+release-check: fmt-check version-check test vet build demo-smoke schema-check release-preflight promtool-check promtool-test
 
 docker-build:
 	docker build --build-arg VERSION=$(VERSION) -t $(IMAGE) .

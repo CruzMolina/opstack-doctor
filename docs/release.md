@@ -16,9 +16,17 @@ Run the local verification suite:
 make release-check
 ```
 
-`make release-check` includes Go tests, vet, smoke checks, Prometheus rule syntax validation through `make promtool-check`, and representative alert firing tests through `make promtool-test`.
+`make release-check` includes Go tests, vet, smoke checks, schema contract checks, release metadata preflight, Prometheus rule syntax validation through `make promtool-check`, and representative alert firing tests through `make promtool-test`.
 
 `VERSION` is the release version used by Make targets and should match the tag without the leading `v`.
+
+You can run just the release metadata preflight with:
+
+```sh
+make release-preflight
+```
+
+The preflight verifies `VERSION`, `cmd/opstack-doctor/main.go`, README install snippets, the latest dated changelog heading, and `docs/releases/v$(cat VERSION).md` agree. It also requires release notes to mention both GHCR tags: `v$(cat VERSION)` and `$(cat VERSION)`.
 
 If Docker is available, verify the local image path too:
 

@@ -4,6 +4,12 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
+## 0.1.13 - Unreleased
+
+### Added
+
+- Release metadata preflight with `make release-preflight`, wired into `make release-check`, to catch version drift before tagging.
+
 ## 0.1.12 - 2026-05-11
 
 ### Added
