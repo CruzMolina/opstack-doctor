@@ -1,0 +1,188 @@
+{
+  "summary": {
+    "info": 1,
+    "ok": 11,
+    "warn": 0,
+    "fail": 0,
+    "total": 12
+  },
+  "findings": [
+    {
+      "id": "config.valid",
+      "title": "Configuration is valid",
+      "severity": "ok",
+      "target": "config",
+      "observed": "fixture topology includes redundant sources, followers, proxyd, and interop dependency intent",
+      "recommendation": "Use this as a deterministic example report; live validation still requires opstack-doctor check against operator-owned endpoints."
+    },
+    {
+      "id": "execution.candidate.client_family",
+      "title": "Execution candidate is op-reth/reth",
+      "severity": "ok",
+      "target": "execution.candidate_rpc",
+      "observed": "clientVersion=op-reth/v1.4.2 fixture",
+      "recommendation": "Continue running the candidate beside the reference and comparing hashes, state roots, and RPC outputs before migration cutover.",
+      "docs": [
+        "https://docs.optimism.io/notices/op-geth-deprecation"
+      ],
+      "evidence": {
+        "client_version": "op-reth/v1.4.2 fixture"
+      }
+    },
+    {
+      "id": "execution.head_lag",
+      "title": "Execution candidate head is close to reference",
+      "severity": "ok",
+      "target": "execution",
+      "observed": "candidate lag is 1 blocks",
+      "recommendation": "Keep monitoring candidate lag until cutover; this fixture represents a healthy steady state.",
+      "docs": [
+        "https://docs.optimism.io/notices/op-geth-deprecation"
+      ],
+      "evidence": {
+        "candidate_head": "17000009",
+        "lag_blocks": "1",
+        "reference_head": "17000010"
+      }
+    },
+    {
+      "id": "execution.block_compare.match",
+      "title": "Execution blocks match",
+      "severity": "ok",
+      "target": "execution",
+      "observed": "compared 16 common blocks with matching hashes and roots",
+      "recommendation": "Keep this comparison in pre-cutover automation so op-reth divergence is caught before serving traffic.",
+      "docs": [
+        "https://docs.optimism.io/notices/op-geth-deprecation"
+      ],
+      "evidence": {
+        "common_head": "17000009",
+        "compared_blocks": "16"
+      }
+    },
+    {
+      "id": "execution.rpc_surface.match",
+      "title": "Execution RPC samples match",
+      "severity": "ok",
+      "target": "execution",
+      "observed": "sampled read-only RPC outputs matched between reference and candidate",
+      "recommendation": "Expand sampled methods cautiously as operator confidence and endpoint compatibility requirements grow.",
+      "docs": [
+        "https://docs.optimism.io/notices/op-geth-deprecation"
+      ],
+      "evidence": {
+        "sampled_methods": "eth_getBlockByNumber,eth_getBlockByHash,eth_getBlockTransactionCountByNumber"
+      }
+    },
+    {
+      "id": "op_node.source-1.up",
+      "title": "op-node reports up",
+      "severity": "ok",
+      "target": "op_nodes.source-1",
+      "observed": "op_node_default_up=1",
+      "recommendation": "Keep source node availability as a hard dependency in dashboards and alerting.",
+      "docs": [
+        "https://docs.optimism.io/node-operators/guides/monitoring/metrics",
+        "https://www.optimism.io/blog/light-nodes-specialize-your-op-node-fleet"
+      ],
+      "evidence": {
+        "value": "1"
+      }
+    },
+    {
+      "id": "op_node.source-1.peer_count",
+      "title": "op-node peer count is above threshold",
+      "severity": "ok",
+      "target": "op_nodes.source-1",
+      "observed": "peer count 8 \u003e= threshold 1",
+      "recommendation": "Keep P2P peer count alerting enabled for source nodes.",
+      "docs": [
+        "https://docs.optimism.io/node-operators/guides/monitoring/metrics"
+      ],
+      "evidence": {
+        "peer_count": "8",
+        "threshold": "1"
+      }
+    },
+    {
+      "id": "topology.light-1.rpc_head",
+      "title": "Follower RPC head tracks source",
+      "severity": "ok",
+      "target": "op_nodes.light-1",
+      "observed": "light-1 is 1 blocks behind source-1",
+      "recommendation": "Use source nodes as the dependency tier for light and sequencer op-nodes; keep follower lag alerting in place.",
+      "docs": [
+        "https://www.optimism.io/blog/light-nodes-specialize-your-op-node-fleet"
+      ],
+      "evidence": {
+        "follower_head": "17000008",
+        "lag_blocks": "1",
+        "source": "source-1",
+        "source_head": "17000009",
+        "threshold": "20"
+      }
+    },
+    {
+      "id": "topology.light-1.safe_head_metrics",
+      "title": "Follower safe head tracks source",
+      "severity": "ok",
+      "target": "op_nodes.light-1",
+      "observed": "safe head lag is 2 blocks",
+      "recommendation": "Treat source safe-head freshness as a dependency for follower health.",
+      "docs": [
+        "https://www.optimism.io/blog/light-nodes-specialize-your-op-node-fleet",
+        "https://docs.optimism.io/node-operators/guides/monitoring/metrics"
+      ],
+      "evidence": {
+        "follower_safe_head": "16999998",
+        "lag_blocks": "2",
+        "source": "source-1",
+        "source_safe_head": "17000000",
+        "threshold": "20"
+      }
+    },
+    {
+      "id": "proxyd.deriver.consensus_aware",
+      "title": "Deriver proxyd is consensus-aware",
+      "severity": "ok",
+      "target": "proxyd.deriver",
+      "observed": "consensus-aware routing intent declared with 2 source backends",
+      "recommendation": "Keep consensus-aware proxyd in front of production consumers that need protection from divergent backends.",
+      "docs": [
+        "https://docs.optimism.io/operators/chain-operators/tools/proxyd",
+        "https://www.optimism.io/blog/light-nodes-specialize-your-op-node-fleet"
+      ],
+      "evidence": {
+        "backend_count": "2",
+        "consensus_aware": "true"
+      }
+    },
+    {
+      "id": "interop.scope",
+      "title": "Interop fixture scope",
+      "severity": "info",
+      "target": "interop",
+      "observed": "basic dependency readiness only; no cross-chain message validation is implied",
+      "recommendation": "Use this fixture to understand output shape. Live interop readiness still requires following every dependency chain and protocol-specific validation.",
+      "docs": [
+        "https://docs.optimism.io/op-stack/interop/explainer"
+      ]
+    },
+    {
+      "id": "interop.base.reachable",
+      "title": "Interop dependency RPC is reachable",
+      "severity": "ok",
+      "target": "interop.dependencies.base",
+      "observed": "chain_id=8453 head=24000000",
+      "recommendation": "Keep dependency-set RPC and metrics endpoints observable before enabling deeper interop validation.",
+      "docs": [
+        "https://docs.optimism.io/op-stack/interop/explainer",
+        "https://docs.optimism.io/node-operators/guides/monitoring/metrics"
+      ],
+      "evidence": {
+        "chain_id": "8453",
+        "head": "24000000"
+      }
+    }
+  ]
+}

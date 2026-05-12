@@ -1,0 +1,178 @@
+{
+  "summary": {
+    "info": 1,
+    "ok": 4,
+    "warn": 7,
+    "fail": 0,
+    "total": 12
+  },
+  "findings": [
+    {
+      "id": "config.valid",
+      "title": "Configuration is valid",
+      "severity": "ok",
+      "target": "config",
+      "observed": "fixture config parses, but operational warnings remain",
+      "recommendation": "Use warnings as follow-up work before treating the fleet as production-ready."
+    },
+    {
+      "id": "execution.reference.client_family",
+      "title": "Execution reference is op-geth",
+      "severity": "warn",
+      "target": "execution.reference_rpc",
+      "observed": "clientVersion=op-geth/v1.101.4 fixture",
+      "recommendation": "op-geth and op-program support ends May 31, 2026. Keep op-geth as a temporary reference only while validating an op-reth candidate.",
+      "docs": [
+        "https://docs.optimism.io/notices/op-geth-deprecation"
+      ],
+      "evidence": {
+        "client_version": "op-geth/v1.101.4 fixture"
+      }
+    },
+    {
+      "id": "execution.candidate.client_family",
+      "title": "Execution candidate is op-reth/reth",
+      "severity": "ok",
+      "target": "execution.candidate_rpc",
+      "observed": "clientVersion=op-reth/v1.4.2 fixture",
+      "recommendation": "Continue validating candidate behavior against the reference until cutover.",
+      "docs": [
+        "https://docs.optimism.io/notices/op-geth-deprecation"
+      ],
+      "evidence": {
+        "client_version": "op-reth/v1.4.2 fixture"
+      }
+    },
+    {
+      "id": "execution.head_lag",
+      "title": "Execution candidate head is close to reference",
+      "severity": "ok",
+      "target": "execution",
+      "observed": "candidate lag is 2 blocks",
+      "recommendation": "Keep monitoring lag while block and RPC comparisons continue.",
+      "docs": [
+        "https://docs.optimism.io/notices/op-geth-deprecation"
+      ],
+      "evidence": {
+        "candidate_head": "17000008",
+        "lag_blocks": "2",
+        "reference_head": "17000010"
+      }
+    },
+    {
+      "id": "execution.block_compare.match",
+      "title": "Execution blocks match",
+      "severity": "ok",
+      "target": "execution",
+      "observed": "compared 16 common blocks with matching hashes and roots",
+      "recommendation": "Continue comparing common blocks during migration rehearsal.",
+      "docs": [
+        "https://docs.optimism.io/notices/op-geth-deprecation"
+      ],
+      "evidence": {
+        "common_head": "17000008",
+        "compared_blocks": "16"
+      }
+    },
+    {
+      "id": "topology.source_redundancy",
+      "title": "Only one source op-node is configured",
+      "severity": "warn",
+      "target": "op_nodes",
+      "observed": "source_count=1",
+      "recommendation": "Add source-node redundancy before many light or sequencer nodes depend on the source tier.",
+      "docs": [
+        "https://www.optimism.io/blog/light-nodes-specialize-your-op-node-fleet"
+      ],
+      "evidence": {
+        "source_count": "1"
+      }
+    },
+    {
+      "id": "op_node.source-1.peer_count",
+      "title": "op-node peer count is below threshold",
+      "severity": "warn",
+      "target": "op_nodes.source-1",
+      "observed": "peer count 0 \u003c threshold 1",
+      "recommendation": "Investigate P2P connectivity and peer discovery; source nodes should not silently lose peer coverage.",
+      "docs": [
+        "https://docs.optimism.io/node-operators/guides/monitoring/metrics"
+      ],
+      "evidence": {
+        "peer_count": "0",
+        "threshold": "1"
+      }
+    },
+    {
+      "id": "op_node.source-1.derivation_errors_total",
+      "title": "Derivation errors observed",
+      "severity": "warn",
+      "target": "op_nodes.source-1",
+      "observed": "op_node_default_derivation_errors_total=3",
+      "recommendation": "Investigate derivation errors and correlate with L1 RPC, resets, and source-node load.",
+      "docs": [
+        "https://docs.optimism.io/node-operators/guides/monitoring/metrics"
+      ],
+      "evidence": {
+        "errors_total": "3"
+      }
+    },
+    {
+      "id": "topology.light-1.safe_head_metrics",
+      "title": "Follower safe head lags source",
+      "severity": "warn",
+      "target": "op_nodes.light-1",
+      "observed": "safe head lag is 34 blocks, above threshold 20",
+      "recommendation": "Check follow-source reachability, source-node health, and follower safe-chain tracking.",
+      "docs": [
+        "https://www.optimism.io/blog/light-nodes-specialize-your-op-node-fleet",
+        "https://docs.optimism.io/node-operators/guides/monitoring/metrics"
+      ],
+      "evidence": {
+        "follower_safe_head": "16999966",
+        "lag_blocks": "34",
+        "source": "source-1",
+        "source_safe_head": "17000000",
+        "threshold": "20"
+      }
+    },
+    {
+      "id": "proxyd.deriver.consensus_aware",
+      "title": "Deriver proxyd consensus awareness is not declared",
+      "severity": "warn",
+      "target": "proxyd.deriver",
+      "observed": "consensus_aware=false",
+      "recommendation": "Use consensus-aware proxyd for production deriver routing when source-node backends can disagree.",
+      "docs": [
+        "https://docs.optimism.io/operators/chain-operators/tools/proxyd",
+        "https://www.optimism.io/blog/light-nodes-specialize-your-op-node-fleet"
+      ],
+      "evidence": {
+        "consensus_aware": "false"
+      }
+    },
+    {
+      "id": "interop.scope",
+      "title": "Interop fixture scope",
+      "severity": "info",
+      "target": "interop",
+      "observed": "basic dependency readiness only; no cross-chain message validation is implied",
+      "recommendation": "Use this as a dependency observability warning example, not as proof of protocol readiness.",
+      "docs": [
+        "https://docs.optimism.io/op-stack/interop/explainer"
+      ]
+    },
+    {
+      "id": "interop.base.metrics",
+      "title": "Interop dependency metrics are absent",
+      "severity": "warn",
+      "target": "interop.dependencies.base",
+      "observed": "metrics endpoint not configured or unreachable",
+      "recommendation": "Add metrics for each dependency chain so dependency-set health is visible before interop workloads rely on it.",
+      "docs": [
+        "https://docs.optimism.io/op-stack/interop/explainer",
+        "https://docs.optimism.io/node-operators/guides/monitoring/metrics"
+      ]
+    }
+  ]
+}

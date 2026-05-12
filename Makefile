@@ -34,6 +34,9 @@ demo-smoke:
 	go run ./cmd/opstack-doctor demo --scenario healthy --output prometheus >/tmp/opstack-doctor-demo-healthy.prom
 	go run ./cmd/opstack-doctor demo --scenario warn --output json >/tmp/opstack-doctor-demo-warn.json
 	go run ./cmd/opstack-doctor demo --scenario fail --output prometheus >/tmp/opstack-doctor-demo-fail.prom
+	go run ./cmd/opstack-doctor fixture healthy --output json >/tmp/opstack-doctor-fixture-healthy.json
+	go run ./cmd/opstack-doctor fixture warn --output prometheus >/tmp/opstack-doctor-fixture-warn.prom
+	go run ./cmd/opstack-doctor fixture fail --output json >/tmp/opstack-doctor-fixture-fail.json
 
 schema-check:
 	go test ./internal/generate -run 'TestSchemaContract'
@@ -58,3 +61,4 @@ docker-smoke:
 	docker run --rm $(IMAGE) generate schema --out /tmp/doctor.schema.json
 	docker run --rm -v "$$(pwd)/examples/doctor.example.yaml:/config/doctor.yaml:ro" $(IMAGE) validate --config /config/doctor.yaml --output json >/tmp/opstack-doctor-docker-validate-example.json
 	docker run --rm $(IMAGE) demo --scenario healthy --output prometheus >/tmp/opstack-doctor-docker-demo-healthy.prom
+	docker run --rm $(IMAGE) fixture healthy --output json >/tmp/opstack-doctor-docker-fixture-healthy.json

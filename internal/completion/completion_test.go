@@ -10,7 +10,7 @@ func TestScriptSupportedShells(t *testing.T) {
 		shell string
 		want  []string
 	}{
-		{"bash", []string{"complete -F _opstack_doctor_completion opstack-doctor", "validate check export demo generate completion version help", "--config --output --fail-on"}},
+		{"bash", []string{"complete -F _opstack_doctor_completion opstack-doctor", "validate check export demo fixture generate completion version help", "--config --output --fail-on"}},
 		{"zsh", []string{"#compdef opstack-doctor", "completion_shells", "validate_flags"}},
 		{"fish", []string{"complete -c opstack-doctor", "__fish_seen_subcommand_from validate", "bash zsh fish"}},
 	}

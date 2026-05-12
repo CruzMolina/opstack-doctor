@@ -1,0 +1,151 @@
+{
+  "summary": {
+    "info": 1,
+    "ok": 1,
+    "warn": 2,
+    "fail": 6,
+    "total": 10
+  },
+  "findings": [
+    {
+      "id": "config.valid",
+      "title": "Configuration is valid",
+      "severity": "ok",
+      "target": "config",
+      "observed": "fixture config parses, but live readiness failures are represented",
+      "recommendation": "Fix fail findings before migration or topology cutover."
+    },
+    {
+      "id": "execution.candidate.client_family",
+      "title": "Execution candidate is op-geth",
+      "severity": "fail",
+      "target": "execution.candidate_rpc",
+      "observed": "clientVersion=op-geth/v1.101.4 fixture",
+      "recommendation": "Candidate migration endpoints should be op-reth/reth. op-geth and op-program support ends May 31, 2026.",
+      "docs": [
+        "https://docs.optimism.io/notices/op-geth-deprecation"
+      ],
+      "evidence": {
+        "client_version": "op-geth/v1.101.4 fixture"
+      }
+    },
+    {
+      "id": "execution.head_lag",
+      "title": "Execution candidate lags reference",
+      "severity": "fail",
+      "target": "execution.candidate_rpc",
+      "observed": "candidate is 12 blocks behind reference",
+      "recommendation": "Investigate candidate sync health before migration cutover; keep op-reth running alongside the existing node until heads converge.",
+      "docs": [
+        "https://docs.optimism.io/notices/op-geth-deprecation"
+      ],
+      "evidence": {
+        "candidate_head": "16999998",
+        "lag_blocks": "12",
+        "reference_head": "17000010"
+      }
+    },
+    {
+      "id": "execution.block_compare.divergence",
+      "title": "Execution block comparison diverged",
+      "severity": "fail",
+      "target": "execution",
+      "observed": "block 16999998 field stateRoot differs",
+      "recommendation": "Do not cut over traffic until block hash, state root, transaction root, and receipt root comparisons match across the sampled window.",
+      "docs": [
+        "https://docs.optimism.io/notices/op-geth-deprecation"
+      ],
+      "evidence": {
+        "block_number": "16999998",
+        "candidate": "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "field": "stateRoot",
+        "reference": "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "execution.rpc_surface.block_by_hash",
+      "title": "Execution RPC sample mismatch",
+      "severity": "fail",
+      "target": "execution",
+      "observed": "eth_getBlockByHash returned different output for the sampled common head",
+      "recommendation": "Treat RPC output mismatch as a cutover blocker until the candidate behavior is understood.",
+      "docs": [
+        "https://docs.optimism.io/notices/op-geth-deprecation"
+      ],
+      "evidence": {
+        "method": "eth_getBlockByHash"
+      }
+    },
+    {
+      "id": "op_node.source-1.up",
+      "title": "op-node reports down",
+      "severity": "fail",
+      "target": "op_nodes.source-1",
+      "observed": "op_node_default_up=0",
+      "recommendation": "Restore source-node health before allowing light or sequencer op-nodes to depend on it.",
+      "docs": [
+        "https://docs.optimism.io/node-operators/guides/monitoring/metrics",
+        "https://www.optimism.io/blog/light-nodes-specialize-your-op-node-fleet"
+      ],
+      "evidence": {
+        "value": "0"
+      }
+    },
+    {
+      "id": "topology.light-1.rpc_head",
+      "title": "Follower RPC head lags source",
+      "severity": "warn",
+      "target": "op_nodes.light-1",
+      "observed": "light-1 is 45 blocks behind source-1",
+      "recommendation": "Check follow-source connectivity and source-node availability before using this follower for production traffic.",
+      "docs": [
+        "https://www.optimism.io/blog/light-nodes-specialize-your-op-node-fleet"
+      ],
+      "evidence": {
+        "follower_head": "16999955",
+        "lag_blocks": "45",
+        "source": "source-1",
+        "source_head": "17000000",
+        "threshold": "20"
+      }
+    },
+    {
+      "id": "proxyd.deriver.rpc",
+      "title": "Deriver proxyd RPC is unreachable",
+      "severity": "fail",
+      "target": "proxyd.deriver",
+      "observed": "HTTP request failed in fixture",
+      "recommendation": "Restore proxyd routing before using this endpoint as a production dependency for derivation or edge traffic.",
+      "docs": [
+        "https://docs.optimism.io/operators/chain-operators/tools/proxyd",
+        "https://www.optimism.io/blog/light-nodes-specialize-your-op-node-fleet"
+      ]
+    },
+    {
+      "id": "interop.scope",
+      "title": "Interop fixture scope",
+      "severity": "info",
+      "target": "interop",
+      "observed": "basic dependency readiness only; no cross-chain message validation is implied",
+      "recommendation": "This fail fixture still represents endpoint readiness only, not full interop protocol validation.",
+      "docs": [
+        "https://docs.optimism.io/op-stack/interop/explainer"
+      ]
+    },
+    {
+      "id": "interop.base.chain_id",
+      "title": "Interop dependency chain ID mismatch",
+      "severity": "warn",
+      "target": "interop.dependencies.base",
+      "observed": "expected chain_id=8453 observed chain_id=10",
+      "recommendation": "Point every dependency RPC at the configured chain before relying on dependency-set readiness checks.",
+      "docs": [
+        "https://docs.optimism.io/op-stack/interop/explainer"
+      ],
+      "evidence": {
+        "expected_chain_id": "8453",
+        "observed_chain_id": "10"
+      }
+    }
+  ]
+}

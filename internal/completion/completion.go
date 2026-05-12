@@ -38,7 +38,7 @@ _opstack_doctor_completion() {
   case "$prev" in
     --output)
       case "$cmd" in
-        check|demo) COMPREPLY=( $(compgen -W "human json prometheus" -- "$cur") ) ;;
+        check|demo|fixture) COMPREPLY=( $(compgen -W "human json prometheus" -- "$cur") ) ;;
         validate) COMPREPLY=( $(compgen -W "human json" -- "$cur") ) ;;
       esac
       return 0
@@ -46,7 +46,7 @@ _opstack_doctor_completion() {
     --fail-on)
       case "$cmd" in
         validate) COMPREPLY=( $(compgen -W "fail warn none" -- "$cur") ) ;;
-        check|demo) COMPREPLY=( $(compgen -W "fail warn" -- "$cur") ) ;;
+        check|demo|fixture) COMPREPLY=( $(compgen -W "fail warn" -- "$cur") ) ;;
       esac
       return 0
       ;;
@@ -61,6 +61,7 @@ _opstack_doctor_completion() {
       validate) COMPREPLY=( $(compgen -W "--config --output --fail-on" -- "$cur") ) ;;
       check) COMPREPLY=( $(compgen -W "--config --output --fail-on" -- "$cur") ) ;;
       demo) COMPREPLY=( $(compgen -W "--scenario --output --fail-on" -- "$cur") ) ;;
+      fixture) COMPREPLY=( $(compgen -W "--output --fail-on" -- "$cur") ) ;;
       export) [[ "$subcmd" == "metrics" ]] && COMPREPLY=( $(compgen -W "--config" -- "$cur") ) ;;
       generate)
         if [[ "$subcmd" == "alerts" || "$subcmd" == "runbook" ]]; then
@@ -75,11 +76,12 @@ _opstack_doctor_completion() {
 
   case "$COMP_CWORD" in
     1)
-      COMPREPLY=( $(compgen -W "validate check export demo generate completion version help" -- "$cur") )
+      COMPREPLY=( $(compgen -W "validate check export demo fixture generate completion version help" -- "$cur") )
       ;;
     2)
       case "$cmd" in
         export) COMPREPLY=( $(compgen -W "metrics" -- "$cur") ) ;;
+        fixture) COMPREPLY=( $(compgen -W "healthy warn fail" -- "$cur") ) ;;
         generate) COMPREPLY=( $(compgen -W "alerts runbook schema" -- "$cur") ) ;;
         completion) COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") ) ;;
       esac
@@ -93,12 +95,13 @@ complete -F _opstack_doctor_completion opstack-doctor
 const zshScript = `#compdef opstack-doctor
 
 _opstack_doctor() {
-  local -a commands validate_flags check_flags demo_flags export_subcommands generate_subcommands completion_shells
+  local -a commands validate_flags check_flags demo_flags fixture_flags fixture_scenarios export_subcommands generate_subcommands completion_shells
   commands=(
     'validate:validate config and topology intent offline'
     'check:run read-only live diagnostics'
     'export:emit scrapeable exports'
     'demo:run mocked local scenarios'
+    'fixture:print deterministic example reports'
     'generate:generate alerts, runbooks, or schema'
     'completion:generate shell completion'
     'version:print version'
@@ -119,6 +122,11 @@ _opstack_doctor() {
     '--output[output format]:format:(human json prometheus)'
     '--fail-on[exit nonzero on severity]:severity:(fail warn)'
   )
+  fixture_flags=(
+    '--output[output format]:format:(human json prometheus)'
+    '--fail-on[exit nonzero on severity]:severity:(fail warn)'
+  )
+  fixture_scenarios=('healthy:all checks healthy' 'warn:warnings only' 'fail:failure findings included')
   export_subcommands=('metrics:emit doctor findings as Prometheus text metrics')
   generate_subcommands=('alerts:generate Prometheus alert rules' 'runbook:generate Markdown runbook' 'schema:generate JSON Schema for doctor.yaml')
   completion_shells=('bash:bash completion' 'zsh:zsh completion' 'fish:fish completion')
@@ -132,6 +140,13 @@ _opstack_doctor() {
       ;;
     demo)
       _arguments "${demo_flags[@]}"
+      ;;
+    fixture)
+      if (( CURRENT == 3 )); then
+        _describe 'fixture scenario' fixture_scenarios
+      else
+        _arguments "${fixture_flags[@]}"
+      fi
       ;;
     export)
       if (( CURRENT == 3 )); then
@@ -168,6 +183,7 @@ complete -c opstack-doctor -n "__fish_use_subcommand" -a validate -d "Validate c
 complete -c opstack-doctor -n "__fish_use_subcommand" -a check -d "Run read-only live diagnostics"
 complete -c opstack-doctor -n "__fish_use_subcommand" -a export -d "Emit scrapeable exports"
 complete -c opstack-doctor -n "__fish_use_subcommand" -a demo -d "Run mocked local scenarios"
+complete -c opstack-doctor -n "__fish_use_subcommand" -a fixture -d "Print deterministic example reports"
 complete -c opstack-doctor -n "__fish_use_subcommand" -a generate -d "Generate alerts, runbooks, or schema"
 complete -c opstack-doctor -n "__fish_use_subcommand" -a completion -d "Generate shell completion"
 complete -c opstack-doctor -n "__fish_use_subcommand" -a version -d "Print version"
@@ -183,6 +199,10 @@ complete -c opstack-doctor -n "__fish_seen_subcommand_from check" -l fail-on -xa
 complete -c opstack-doctor -n "__fish_seen_subcommand_from demo" -l scenario -xa "healthy warn fail" -d "Demo scenario"
 complete -c opstack-doctor -n "__fish_seen_subcommand_from demo" -l output -xa "human json prometheus" -d "Output format"
 complete -c opstack-doctor -n "__fish_seen_subcommand_from demo" -l fail-on -xa "fail warn" -d "Exit nonzero on severity"
+
+complete -c opstack-doctor -n "__fish_seen_subcommand_from fixture; and not __fish_seen_subcommand_from healthy warn fail" -a "healthy warn fail" -d "Fixture scenario"
+complete -c opstack-doctor -n "__fish_seen_subcommand_from fixture" -l output -xa "human json prometheus" -d "Output format"
+complete -c opstack-doctor -n "__fish_seen_subcommand_from fixture" -l fail-on -xa "fail warn" -d "Exit nonzero on severity"
 
 complete -c opstack-doctor -n "__fish_seen_subcommand_from export; and not __fish_seen_subcommand_from metrics" -a metrics -d "Emit doctor findings as Prometheus text metrics"
 complete -c opstack-doctor -n "__fish_seen_subcommand_from export; and __fish_seen_subcommand_from metrics" -l config -r -d "Path to doctor YAML config"

@@ -160,6 +160,19 @@ The demo command starts temporary localhost RPC and metrics servers, runs the no
 - `warn`: op-geth reference, one source node, non-consensus-aware deriver proxyd, low peer count, derivation errors, follower lag.
 - `fail`: op-geth candidate, execution lag/divergence, unreachable proxyd routing, and an op-node reporting down.
 
+## Fixture Reports
+
+Print deterministic, no-network example reports for docs, support threads, tests, and alert-pipeline rehearsals:
+
+```sh
+opstack-doctor fixture healthy --output json
+opstack-doctor fixture warn --output json
+opstack-doctor fixture fail --output json
+opstack-doctor fixture healthy --output prometheus
+```
+
+Unlike `demo`, the `fixture` command does not start mock servers or run live checks. It emits stable findings that show healthy, warning-only, and failing report shapes. Checked-in JSON examples live at [examples/fixture-healthy.example.json](examples/fixture-healthy.example.json), [examples/fixture-warn.example.json](examples/fixture-warn.example.json), and [examples/fixture-fail.example.json](examples/fixture-fail.example.json).
+
 ## Generate Artifacts
 
 ```sh

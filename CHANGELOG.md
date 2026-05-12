@@ -4,6 +4,12 @@ All notable changes to `opstack-doctor` will be documented here.
 
 The project uses semantic versioning. Release tags are prefixed with `v`, for example `v0.1.0`.
 
+## 0.1.15 - Unreleased
+
+### Added
+
+- Deterministic `opstack-doctor fixture healthy|warn|fail` reports with checked-in JSON examples for docs, support workflows, and alert-pipeline rehearsals.
+
 ## 0.1.14 - 2026-05-12
 
 ### Added
